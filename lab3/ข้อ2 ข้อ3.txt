@@ -1,0 +1,104 @@
+# 1. ลบของเก่าทิ้ง
+sudo docker rm -f router1 router2 c1 c3
+sudo docker network rm router-link
+sudo ovs-vsctl del-br ovs1
+sudo ovs-vsctl del-br ovs2
+sudo ovs-vsctl add-br ovs1
+sudo ovs-vsctl add-br ovs2
+
+# 2. สร้าง Network กลาง
+sudo docker network create --subnet=192.168.0.0/24 --gateway=192.168.0.254 router-link
+
+# 3. สร้าง Router (God Mode)
+sudo docker run -d --name router1 --hostname router1 --privileged \
+  --network router-link --ip 192.168.0.1 \
+  --sysctl net.ipv4.ip_forward=1 \
+  --entrypoint /bin/sh frrouting/frr:latest -c "tail -f /dev/null"
+
+sudo docker run -d --name router2 --hostname router2 --privileged \
+  --network router-link --ip 192.168.0.2 \
+  --sysctl net.ipv4.ip_forward=1 \
+  --entrypoint /bin/sh frrouting/frr:latest -c "tail -f /dev/null"
+
+# 4. สร้าง Host C1 และ C3 (เปลี่ยนเป็น God Mode --privileged)
+# ตัดปัญหาเรื่อง Permission ทุกอย่าง
+sudo docker run -dit --name c1 --net=none --privileged alpine sh
+sudo docker run -dit --name c3 --net=none --privileged alpine sh
+
+# 5. Start Service OSPF
+sudo docker exec router1 sh -c 'echo "hostname router1" > /etc/frr/frr.conf && echo "router ospf" >> /etc/frr/frr.conf'
+sudo docker exec router2 sh -c 'echo "hostname router2" > /etc/frr/frr.conf && echo "router ospf" >> /etc/frr/frr.conf'
+sudo docker exec -d router1 /usr/lib/frr/ospfd -d -f /etc/frr/frr.conf
+sudo docker exec -d router2 /usr/lib/frr/ospfd -d -f /etc/frr/frr.conf
+sudo docker exec -d router1 /usr/lib/frr/zebra -d -f /etc/frr/frr.conf
+sudo docker exec -d router2 /usr/lib/frr/zebra -d -f /etc/frr/frr.conf
+
+----------------------------------------------------------------------------------------------------------
+# 1. ต่อสาย C1 เข้า OVS1 และ Router1
+sudo ovs-docker add-port ovs1 eth0 c1 --ipaddress=10.1.1.10/24 --gateway=10.1.1.1
+sudo ovs-docker add-port ovs1 eth1 router1
+
+# 2. ต่อสาย C3 เข้า OVS2 และ Router2
+sudo ovs-docker add-port ovs2 eth0 c3 --ipaddress=10.2.2.10/24 --gateway=10.2.2.1
+sudo ovs-docker add-port ovs2 eth1 router2
+
+# 3. ตั้ง IP ให้ขา Router (ตั้งตรงๆ ที่ eth1)
+sudo docker exec router1 ip addr add 10.1.1.1/24 dev eth1
+sudo docker exec router2 ip addr add 10.2.2.1/24 dev eth1
+----------------------------------------------------------------------------------------------------------
+sudo docker exec router1 vtysh -c "conf t" \
+-c "router ospf" \
+-c "network 192.168.0.0/24 area 0" \
+-c "network 10.1.1.0/24 area 0" \
+-c "exit" -c "exit"
+----------------------------------------------------------------------------------------------------------
+sudo docker exec router2 vtysh -c "conf t" \
+-c "router ospf" \
+-c "network 192.168.0.0/24 area 0" \
+-c "network 10.2.2.0/24 area 0" \
+-c "exit" -c "exit"
+----------------------------------------------------------------------------------------------------------
+sudo docker exec router1 vtysh -c "show ip ospf neighbor"
+----------------------------------------------------------------------------------------------------------
+# 1. ลบ IP เดิมออกจาก eth1 (เพื่อให้ eth1 กลายเป็นสายเปล่าๆ)
+sudo docker exec router1 ip addr flush dev eth1
+
+# 2. สร้างท่อ VXLAN และสะพาน Bridge
+sudo docker exec router1 ip link add vxlan100 type vxlan id 100 dev eth0 dstport 4789 remote 192.168.0.2
+sudo docker exec router1 ip link add br100 type bridge
+
+# 3. (ยาแก้หน่วง) ลด MTU ทันที ก่อนเปิดใช้งาน!
+sudo docker exec router1 ip link set dev vxlan100 mtu 1350
+sudo docker exec router1 ip link set dev br100 mtu 1350
+
+# 4. ผูกสายรวมกัน (VXLAN + สายจาก C1) เข้าสะพาน
+sudo docker exec router1 ip link set vxlan100 master br100
+sudo docker exec router1 ip link set eth1 master br100
+
+# 5. เปิดใช้งานและตั้ง IP ใหม่ที่สะพาน
+sudo docker exec router1 ip link set vxlan100 up
+sudo docker exec router1 ip link set br100 up
+sudo docker exec router1 ip addr add 10.1.1.1/24 dev br100
+----------------------------------------------------------------------------------------------------------
+# 1. ลบ IP เดิม
+sudo docker exec router2 ip addr flush dev eth1
+
+# 2. สร้างท่อและสะพาน
+sudo docker exec router2 ip link add vxlan100 type vxlan id 100 dev eth0 dstport 4789 remote 192.168.0.1
+sudo docker exec router2 ip link add br100 type bridge
+
+# 3. (ยาแก้หน่วง) ลด MTU
+sudo docker exec router2 ip link set dev vxlan100 mtu 1350
+sudo docker exec router2 ip link set dev br100 mtu 1350
+
+# 4. ผูกสาย
+sudo docker exec router2 ip link set vxlan100 master br100
+sudo docker exec router2 ip link set eth1 master br100
+
+# 5. เปิดใช้งานและตั้ง IP
+sudo docker exec router2 ip link set vxlan100 up
+sudo docker exec router2 ip link set br100 up
+sudo docker exec router2 ip addr add 10.2.2.1/24 dev br100
+----------------------------------------------------------------------------------------------------------
+sudo docker exec c1 ping -c 4 10.2.2.10
+sudo docker exec c1 ping -c 4 20.2.2.10
