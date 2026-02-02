@@ -1,0 +1,106 @@
+#Clear all
+
+
+#I use my pc as an on controller
+sudo apt update
+sudo apt install -y openvswitch-switch ovn-host ovn-central docker
+sudo systemctl enable --now openvswitch-switch ovn-central docker
+sudo ovs-vsctl show
+sudo ovn-nbctl show
+
+#Enable OVN central
+sudo systemctl enable --now ovn-central
+#Expose northbound and southbound databases
+sudo ovn-nbctl set-connection ptcp:6641
+sudo ovn-sbctl set-connection ptcp:6642
+
+#Create logical Switch
+sudo ovn-nbctl ls-add ls-test
+
+#Create logical ports
+sudo ovn-nbctl lsp-add ls-test lp-host1
+sudo ovn-nbctl lsp-add ls-test lp-host2
+sudo ovn-nbctl lsp-add ls-test lp-host3
+sudo ovn-nbctl lsp-add ls-test lp-host4
+
+#Assign IP and MAC Addresses
+sudo ovn-nbctl lsp-set-addresses Lp-host1 "02:00:00:00:00:01 10.0.0.1/24"
+sudo ovn-nbctl lsp-set-addresses Lp-host2 "02:00:00:00:00:03 10.0.0.3/24"
+sudo ovn-nbctl lsp-set-addresses Lp-host3 "02:00:00:00:00:02 10.0.0.2/24"
+sudo ovn-nbctl lsp-set-addresses Lp-host4 "02:00:00:00:00:04 10.0.0.4/24"
+
+#Create OVS Bridges
+#First OVS Bridge
+sudo ovs-vsctl add-br br-ovs1
+sudo ovs-vsctl set open . external-ids:system-id=ovs1
+sudo ovs-vsctl set open . external-ids:ovn-remote=tcp:127.0.0.1:6642
+sudo ovs-vsctl set open . external-ids:ovn-encap-type=geneve
+sudo ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
+
+#Second OVS Bridges
+sudo ovs-vsctl add-br br-ovs2
+sudo ovs-vsctl set open . external-ids:system-id=ovs2
+
+#start ovn controller
+sudo ovn-controller &
+
+#Bind logical ports to chasis
+sudo ovn-nbctl lsp-set-options lp-host1 required-chasis=ovs1
+sudo ovn-nbctl lsp-set-options lp-host2 required-chasis=ovs1
+sudo ovn-nbctl lsp-set-options lp-host3 required-chasis=ovs2
+sudo ovn-nbctl lsp-set-options lp-host4 required-chasis=ovs2
+
+#Verify bindings:
+sudo ovn-sbctl show
+
+#Create veth pairs
+#for i in 1 2 3 4; do
+    sudo ip link add veth$i type veth peer name veth${i}-c
+#done
+
+sudo ip link add veth1 type veth peer name veth1-c
+sudo ip link add veth2 type veth peer name veth2-c
+sudo ip link add veth3 type veth peer name veth3-c
+sudo ip link add veth4 type veth peer name veth4-c
+
+#Attach veth to OVS Bridges
+sudo ovs-vsctl add-port br-ovs1 veth1
+sudo ovs-vsctl add-port br-ovs1 veth2
+sudo ovs-vsctl add-port br-ovs2 veth3
+sudo ovs-vsctl add-port br-ovs2 veth4
+
+#Run alpine Containers
+sudo docker run -dit --name host1 --net=none --privileged alpine sh
+sudo docker run -dit --name host2 --net=none --privileged alpine sh
+sudo docker run -dit --name host3 --net=none --privileged alpine sh
+sudo docker run -dit --name host4 --net=none --privileged alpine sh
+
+#Move Interfaces into Containers
+for i in 1 2 3 4; do
+    pid=${sudo docker inspect -f .State.Pid host$i} 
+    sudo ip link set veth${i}-c netns $pid
+done
+
+#Configure container network
+
+#host1
+sudo docker exec host1 ip link set veth1-c name eth0
+sudo docker exec host1 ip addr add 10.0.0.1/24 dev eth0
+sudo docker exec host1 ip link set eth0 up
+
+#Repeat with appropiate id for other host
+#host2
+
+#host3
+
+#host4
+
+#Conectivity test
+sudo docker exec host1 ping -c 3 10.0.0.4
+sudo docker exec host3 ping -c 3 10.0.0.2
+
+#Useful debug command 
+sudo ovn-nbctl show
+sudo ovn-sbctl show
+sudo ovs-vsctl show
+sudo ovs-ofctl dump-flows br-ovs1

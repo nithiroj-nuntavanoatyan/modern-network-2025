@@ -1,0 +1,221 @@
+Based on your request to adapt the **Lab 4: Configure and Verify EBGP** document for a manual setup using **Alpine Docker containers** (for PCs), **Open vSwitch (OVS)**, and **Dockerized routers**, here is the step-by-step guide.
+
+This setup replicates the topology in **Figure 3** of the PDF without using Mininet or MiniEdit.
+
+### **Prerequisites**
+
+* **Docker** installed.
+* **Open vSwitch** installed and running.
+* **ovs-docker** utility (a standard script to connect Docker containers to OVS bridges).
+* *If you don't have it:* `wget https://raw.githubusercontent.com/openvswitch/ovs/master/utilities/ovs-docker` and `chmod +x ovs-docker`.
+
+---
+
+### **Phase 1: Create the Virtual Switching Infrastructure**
+
+In Mininet, links are automatic. With OVS, we must manually create "bridges" to act as the switches and the cables between routers.
+
+**1. Create OVS Bridges**
+We need 5 bridges to simulate the LANs and the point-to-point links between routers:
+
+* `s1`: AS 100 LAN (connects h1 and r1)
+* `s2`: AS 200 LAN (connects h2 and r2)
+* `link_13`: Link between r1 and r3
+* `link_34`: Link between r3 and r4 (ISP Backbone)
+* `link_24`: Link between r2 and r4
+
+#Cleanup
+sudo docker stop r1 r2 r3 r4 h1 h2
+sudo docker rm r1 r2 r3 r4 h1 h2
+sudo ovs-vsctl del-br s1
+sudo ovs-vsctl del-br s2
+sudo ovs-vsctl del-br link_13
+sudo ovs-vsctl del-br link_34
+sudo ovs-vsctl del-br link_24
+
+Run these commands in your host terminal:
+sudo ovs-vsctl add-br s1
+sudo ovs-vsctl add-br s2
+sudo ovs-vsctl add-br link_13
+sudo ovs-vsctl add-br link_34
+sudo ovs-vsctl add-br link_24
+sudo docker build -t my-alpine-router .
+
+
+### **Phase 2: Deploy Docker Containers**
+
+We will use **Alpine Linux** for the PCs (as requested) and **FRRouting (FRR)** for the routers (since the lab requires `bgpd` and `ospfd`, which are pre-installed in FRR images).
+
+**1. Start the Containers**
+We create them with `--net=none` so we can manually attach networking later.
+
+# Deploy Hosts
+sudo docker run -itd --net=none --name h1 --privileged alpine:latest sh 
+sudo docker run -itd --net=none --name h2 --privileged alpine:latest sh 
+
+# Deploy Routers using your custom image
+sudo docker run -d --net=none --name r1 --privileged my-alpine-router
+sudo docker run -d --net=none --name r2 --privileged my-alpine-router
+sudo docker run -d --net=none --name r3 --privileged my-alpine-router
+sudo docker run -d --net=none --name r4 --privileged my-alpine-router
+
+
+### **Phase 3: Wire the Topology & Assign IPs**
+
+We will now connect the containers to the OVS bridges and assign IP addresses according to **Table 2** in the PDF.
+
+#### **1. Connect AS 100 (Campus-1)**
+
+* **h1 (eth0) <-> s1**
+* **r1 (eth0) <-> s1**
+
+# Connect h1 to s1 (IP: 192.168.1.10/24)
+sudo ovs-docker add-port s1 eth0 h1 --ipaddress=192.168.1.10/24
+sudo docker exec h1 route add default gw 192.168.1.1
+
+# Connect r1 to s1 (IP: 192.168.1.1/24)
+sudo ovs-docker add-port s1 eth0 r1 --ipaddress=192.168.1.1/24
+
+#Check
+sudo docker exec -it h1 sh -c "ifconfig && route && ping 192.168.1.1 -c 5"
+
+
+#### **2. Connect AS 200 (Campus-2)**
+
+* **h2 (eth0) <-> s2**
+* **r2 (eth0) <-> s2**
+
+# Connect h2 to s2 (IP: 192.168.2.10/24)
+sudo ovs-docker add-port s2 eth0 h2 --ipaddress=192.168.2.10/24
+sudo docker exec h2 route add default gw 192.168.2.1
+
+# Connect r2 to s2 (IP: 192.168.2.1/24)
+sudo ovs-docker add-port s2 eth0 r2 --ipaddress=192.168.2.1/24
+
+#Check
+sudo docker exec -it h2 sh -c "ifconfig && route && ping 192.168.2.1 -c 5"
+
+#### **3. Connect ISP Links (AS 300 & Inter-AS)**
+
+* **r1 (eth1) <-> r3 (eth0)** via `link_13`
+* **r3 (eth1) <-> r4 (eth0)** via `link_34`
+* **r4 (eth1) <-> r2 (eth1)** via `link_24`
+
+# Link r1 -> r3
+sudo ovs-docker add-port link_13 eth1 r1 --ipaddress=192.168.13.1/30
+sudo ovs-docker add-port link_13 eth0 r3 --ipaddress=192.168.13.2/30
+sudo docker exec -it r1 sh -c "ping 192.168.13.2 -c 5"
+
+# Link r3 -> r4 (ISP Backbone)
+sudo ovs-docker add-port link_34 eth1 r3 --ipaddress=192.168.34.1/30
+sudo ovs-docker add-port link_34 eth0 r4 --ipaddress=192.168.34.2/30
+sudo docker exec -it r3 sh -c "ping 192.168.34.2 -c 5"
+
+# Link r4 -> r2
+sudo ovs-docker add-port link_24 eth1 r4 --ipaddress=192.168.24.2/30
+sudo ovs-docker add-port link_24 eth1 r2 --ipaddress=192.168.24.1/30
+sudo docker exec -it r4 sh -c "ping 192.168.24.1 -c 5"
+
+We configure OSPF on **r3** and **r4** so they can talk to each other within AS 300.
+
+**Access Router r3:** 
+sudo docker exec -it r3 vtysh
+configure terminal
+router ospf
+network 192.168.13.0/30 area 0
+network 192.168.34.0/30 area 0
+end
+exit
+
+**Access Router r4:** 
+sudo docker exec -it r4 vtysh
+configure terminal
+router ospf
+network 192.168.34.0/30 area 0
+network 192.168.24.0/30 area 0
+end
+exit
+
+#### **Step 2: Configure BGP (External Routing)**
+
+We configure BGP to exchange routes between the Campuses (AS 100/200) and the ISP (AS 300).
+
+**Access Router r1 (AS 100):** 
+sudo docker exec -it r1 vtysh
+configure terminal
+router bgp 100
+no bgp ebgp-requires-policy
+neighbor 192.168.13.2 remote-as 300
+network 192.168.1.0/24
+end
+exit
+
+**Access Router r2 (AS 200):** 
+sudo docker exec -it r2 vtysh
+configure terminal
+router bgp 200
+no bgp ebgp-requires-policy
+neighbor 192.168.24.2 remote-as 300
+network 192.168.2.0/24
+end
+exit
+
+**Access Router r3 (ISP AS 300):** 
+sudo docker exec -it r3 vtysh
+configure terminal
+router bgp 300
+no bgp ebgp-requires-policy
+neighbor 192.168.13.1 remote-as 100
+end
+exit
+
+**Access Router r4 (ISP AS 300):** 
+sudo docker exec -it r4 vtysh
+configure terminal
+router bgp 300
+no bgp ebgp-requires-policy
+neighbor 192.168.24.1 remote-as 200
+end
+exit
+
+#### **Step 3: Redistribution (Connecting OSPF and BGP)**
+
+The ISP routers (r3/r4) know OSPF routes and BGP routes separately. We must redistribute them so traffic can flow through.
+
+**Access Router r3:** 
+sudo docker exec -it r3 vtysh
+configure terminal
+router ospf
+redistribute bgp metric 12
+exit
+router bgp 300
+redistribute ospf
+redistribute connected
+end
+exit
+
+**Access Router r4:** 
+sudo docker exec -it r4 vtysh
+configure terminal
+router ospf
+redistribute bgp metric 12
+exit
+router bgp 300
+redistribute ospf
+redistribute connected
+end
+exit
+
+### **Phase 5: Verification**
+
+1. **Check Connectivity:**
+Access your Alpine host **h1** and ping **h2**:
+sudo docker exec -it h1 ping 192.168.2.10
+
+
+*(Note: The first few pings may fail while ARP and BGP converge.)*
+2. **Verify Routing Table (Optional):**
+Check if **r1** has learned the route to **h2**:
+sudo docker exec -it r1 vtysh -c "show ip route"
+
+You should see a `B` (BGP) entry for `192.168.2.0/24`.

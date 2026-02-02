@@ -1,0 +1,269 @@
+Based on the `Lab_BGP.pdf` document, here is the step-by-step guide to setting up and configuring the lab manually in MiniEdit.
+
+### **Phase 1: Topology Setup (MiniEdit)**
+
+Since you do not have the `lab4.mn` file, you must recreate the topology shown in Figure 3 of the lab document.
+
+1. **Launch MiniEdit**.
+2. **Add the following components:**
+* **Routers:** 4 Legacy Routers (Label them `r1`, `r2`, `r3`, `r4`).
+* **Switches:** 2 Switches (Label them `s1`, `s2`).
+* **Hosts:** 2 Hosts (Label them `h1`, `h2`).
+
+
+3. **Create the Links:**
+* **AS 100 (Campus-1):** Connect `h1` to `s1`, and `s1` to `r1`.
+* **AS 200 (Campus-2):** Connect `h2` to `s2`, and `s2` to `r2`.
+* **ISP Connection (AS 300):**
+* Connect `r1` to `r3`.
+* Connect `r3` to `r4`.
+* Connect `r4` to `r2`.
+
+
+
+
+4. **Run the Topology:** Click the **Run** button.
+
+---
+
+### **Phase 2: Interface Configuration**
+
+Because you do not have the automated configuration script (`lab4_conf.zip`), you must manually configure the IP addresses on each device using their terminals.
+
+**Open a terminal for each device** (Right-click node > Terminal) and run the following commands:
+
+#### **Host h1 Configuration**
+
+```bash
+ifconfig h1-eth0 192.168.1.10 netmask 255.255.255.0 up
+route add default gw 192.168.1.1
+
+```
+
+*(Verify with `ping 192.168.1.1` after configuring r1)* 
+
+#### **Host h2 Configuration**
+
+```bash
+ifconfig h2-eth0 192.168.2.10 netmask 255.255.255.0 up
+route add default gw 192.168.2.1
+
+```
+
+
+
+#### **Router r1 (AS 100)**
+
+```bash
+ifconfig r1-eth0 192.168.1.1 netmask 255.255.255.0 up
+ifconfig r1-eth1 192.168.13.1 netmask 255.255.255.252 up
+sysctl -w net.ipv4.ip_forward=1
+zebra -d
+bgpd -d
+
+```
+
+
+
+#### **Router r2 (AS 200)**
+
+```bash
+ifconfig r2-eth0 192.168.2.1 netmask 255.255.255.0 up
+ifconfig r2-eth1 192.168.24.1 netmask 255.255.255.252 up
+sysctl -w net.ipv4.ip_forward=1
+zebra -d
+bgpd -d
+
+```
+
+
+
+#### **Router r3 (ISP)**
+
+```bash
+ifconfig r3-eth0 192.168.13.2 netmask 255.255.255.252 up
+ifconfig r3-eth1 192.168.34.1 netmask 255.255.255.252 up
+sysctl -w net.ipv4.ip_forward=1
+zebra -d
+ospfd -d
+bgpd -d
+
+```
+
+
+
+#### **Router r4 (ISP)**
+
+```bash
+ifconfig r4-eth0 192.168.34.2 netmask 255.255.255.252 up
+ifconfig r4-eth1 192.168.24.2 netmask 255.255.255.252 up
+sysctl -w net.ipv4.ip_forward=1
+zebra -d
+ospfd -d
+bgpd -d
+
+```
+
+
+
+---
+
+### **Phase 3: Routing Protocol Configuration**
+
+Now that the interfaces are up and daemons are running, use `vtysh` to configure the routing protocols.
+
+#### **Step 1: Configure OSPF (Internal ISP Routing)**
+
+**On Router r3:**
+
+```bash
+vtysh
+configure terminal
+router ospf
+ network 192.168.13.0/30 area 0
+ network 192.168.34.0/30 area 0
+ exit
+exit
+
+```
+
+
+
+**On Router r4:**
+
+```bash
+vtysh
+configure terminal
+router ospf
+ network 192.168.34.0/30 area 0
+ network 192.168.24.0/30 area 0
+ exit
+exit
+
+```
+
+
+
+*Verification:* On r3, `ping 192.168.24.2`. It should work now. 
+
+#### **Step 2: Configure BGP (External Routing)**
+
+**On Router r1 (AS 100):**
+
+```bash
+vtysh
+configure terminal
+router bgp 100
+ neighbor 192.168.13.2 remote-as 300
+ network 192.168.1.0/24
+ exit
+exit
+
+```
+
+
+
+**On Router r2 (AS 200):**
+
+```bash
+vtysh
+configure terminal
+router bgp 200
+ neighbor 192.168.24.2 remote-as 300
+ network 192.168.2.0/24
+ exit
+exit
+
+```
+
+
+
+**On Router r3 (ISP AS 300):**
+
+```bash
+vtysh
+configure terminal
+router bgp 300
+ neighbor 192.168.13.1 remote-as 100
+ exit
+exit
+
+```
+
+
+
+**On Router r4 (ISP AS 300):**
+
+```bash
+vtysh
+configure terminal
+router bgp 300
+ neighbor 192.168.24.1 remote-as 200
+ exit
+exit
+
+```
+
+
+
+#### **Step 3: Configure Redistribution**
+
+Routers r3 and r4 need to share routes between OSPF (internal) and BGP (external).
+
+**On Router r3:**
+
+```bash
+vtysh
+configure terminal
+! Redistribute BGP into OSPF
+router ospf
+ redistribute bgp metric 12
+ exit
+! Redistribute OSPF and Connected into BGP
+router bgp 300
+ redistribute ospf
+ redistribute connected
+ exit
+exit
+
+```
+
+
+
+**On Router r4:**
+
+```bash
+vtysh
+configure terminal
+! Redistribute BGP into OSPF
+router ospf
+ redistribute bgp metric 12
+ exit
+! Redistribute OSPF and Connected into BGP
+router bgp 300
+ redistribute ospf
+ redistribute connected
+ exit
+exit
+
+```
+
+
+
+---
+
+### **Phase 4: Final Verification**
+
+1. **Check r1 Routing Table:**
+On r1 terminal: `vtysh -c "show ip route"`. You should see routes to `192.168.2.0/24` via BGP.
+
+
+2. **Ping Test:**
+On Host **h1**, try to ping Host **h2**:
+```bash
+ping 192.168.2.10
+
+```
+
+
+If successful, the lab is complete.
