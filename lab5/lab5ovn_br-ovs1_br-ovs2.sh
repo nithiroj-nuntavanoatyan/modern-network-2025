@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # --- 1. Cleanup ---
-echo "Cleaning up..."
 sudo docker stop host1 host2 host3 host4 2>/dev/null
 sudo docker rm host1 host2 host3 host4 2>/dev/null
 sudo ovn-nbctl ls-del ls-test 2>/dev/null

@@ -39,9 +39,11 @@ sudo ovs-docker add-port ovs1 eth0 C1 --ipaddress=192.168.1.10/24 --gateway=192.
 sudo ovs-vsctl show
 sudo ovs-docker add-port ovs1 eth0 C2 --ipaddress=192.168.2.10/24 --gateway=192.168.2.1
 sudo ovs-vsctl show
+
 # Connect R1 to OVS1
 # Assign Gateway IP for C1 (.1.1) to interface eth1
 sudo ovs-docker add-port ovs1 eth1 router1 --ipaddress=192.168.1.1/24
+
 # Add Secondary IP for C2 (.2.1) to same interface
 sudo docker exec router1 ip addr add 192.168.2.1/24 dev eth1
 sudo docker exec router1 ip link set eth1 up
@@ -57,6 +59,7 @@ sudo ovs-vsctl show
 # Connect R2 to OVS2
 # Assign Gateway IP for C3 (.3.1) to interface eth1
 sudo ovs-docker add-port ovs2 eth1 router2 --ipaddress=192.168.3.1/24
+
 # Add Secondary IP for C4 (.4.1) to same interface
 sudo docker exec router2 ip addr add 192.168.4.1/24 dev eth1
 sudo docker exec router2 ip link set eth1 up
