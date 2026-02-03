@@ -54,8 +54,6 @@ sudo docker exec C4 sh -c "ip addr flush dev eth0 2>/dev/null || true"
 # Connect C4 to ovs-vxlan200
 sudo ovs-docker add-port ovs-vxlan200 eth1 C4 --ipaddress=10.0.2.20/24
 
-
-
 # Create internal interfaces for gateways on ovs-vxlan100
 sudo ovs-vsctl add-port ovs-vxlan100 vxlan100-gw -- set interface vxlan100-gw type=internal
 sudo ip addr add 10.0.1.1/24 dev vxlan100-gw
