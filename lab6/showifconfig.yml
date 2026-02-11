@@ -1,0 +1,13 @@
+# showifconfig.yml use ansible-playbook -i lab6/hosts.ini lab6/showifconfig.yml
+- name: show ifconfig with shell command
+  hosts: all
+  become: yes
+
+  tasks:
+  - name: show ifconfig
+    shell: ifconfig -a
+    register: output
+  - debug:
+      var: output.stdout_lines
+
+  
