@@ -1,0 +1,20 @@
+# showifconfig.yml use ansible-playbook -i lab6/hosts.ini lab6/change_loopback_ip_address.yml
+- name: change loopback ip address
+  hosts: all
+  become: yes
+
+  tasks:
+  - name: show ifconfig before change ip address
+    shell: ifconfig -a
+    register: output
+  - debug:
+      var: output.stdout_lines
+  
+  - name: change ip address
+    shell: ifconfig lo 172.148.156.31 netmask 255.255.255.0
+
+  - name: show ifconfig after change ip address
+    shell: ifconfig -a
+    register: output
+  - debug:
+      var: output.stdout_lines
