@@ -7,8 +7,6 @@ nano project.clab.yml
 #Inside project.clab.yml, add the following content:
 name: project
 
-name: project
-
 topology:
   nodes:
     srl1:
