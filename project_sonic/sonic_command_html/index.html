@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SONiC DB Command Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #f0883e;
+    --red: #ff7b72;
+    --purple: #bc8cff;
+    --yellow: #e3b341;
+    --text: #c9d1d9;
+    --muted: #6e7681;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 40px 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  header p {
+    color: var(--muted);
+    margin-top: 6px;
+    font-size: 12px;
+  }
+
+  .badge {
+    display: inline-block;
+    background: #1f2937;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-size: 11px;
+    margin-left: 10px;
+    vertical-align: middle;
+  }
+
+  section { margin-bottom: 40px; }
+
+  section h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  section h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  thead tr {
+    background: #1c2128;
+    border-bottom: 1px solid var(--border);
+  }
+
+  thead th {
+    padding: 10px 14px;
+    text-align: left;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #1c2128; }
+
+  td {
+    padding: 9px 14px;
+    vertical-align: top;
+  }
+
+  code {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: var(--green);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .cmd-col { width: 42%; }
+  .desc-col { width: 38%; color: var(--text); }
+  .db-col   { width: 20%; }
+
+  .db-tag {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .db-0  { background: #1a3a1a; color: var(--green); }
+  .db-1  { background: #1a1a3a; color: var(--purple); }
+  .db-2  { background: #3a2a1a; color: var(--orange); }
+  .db-4  { background: #1a2a3a; color: var(--accent); }
+  .db-6  { background: #3a1a1a; color: var(--red); }
+  .db-any{ background: #2a2a1a; color: var(--yellow); }
+
+  .note {
+    background: #161b22;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 16px;
+  }
+
+  .note strong { color: var(--accent); }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+
+  .card h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+  }
+
+  .card ul { list-style: none; }
+  .card ul li { padding: 3px 0; color: var(--muted); }
+  .card ul li code { color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SONiC <span>Redis DB</span> Command Reference <span class="badge">172.20.20.2:6379</span></h1>
+  <p>Internal database interaction · APPL_DB · ASIC_DB · COUNTERS_DB · CONFIG_DB · STATE_DB</p>
+</header>
+
+
+<!-- ── DB MAP ───────────────────────────────────────────────── -->
+<section>
+  <h2>Database Map</h2>
+  <table>
+    <thead><tr>
+      <th>DB Name</th><th>ID</th><th>Description</th><th>Key patterns</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><span class="db-tag db-0">APPL_DB</span></td><td>0</td><td class="desc-col">Routes/neighbors pushed by orchagent to kernel/ASIC</td><td><code>ROUTE_TABLE:* NEIGH_TABLE:* PORT_TABLE:*</code></td></tr>
+      <tr><td><span class="db-tag db-1">ASIC_DB</span></td><td>1</td><td class="desc-col">SAI objects written to the ASIC via syncd</td><td><code>ASIC_STATE:SAI_OBJECT_TYPE_*</code></td></tr>
+      <tr><td><span class="db-tag db-2">COUNTERS_DB</span></td><td>2</td><td class="desc-col">Port/queue/PG hardware statistics</td><td><code>COUNTERS:* COUNTERS_PORT_NAME_MAP</code></td></tr>
+      <tr><td><span class="db-tag db-any">LOGLEVEL_DB</span></td><td>3</td><td class="desc-col">Per-daemon log verbosity settings</td><td><code>*:*</code></td></tr>
+      <tr><td><span class="db-tag db-4">CONFIG_DB</span></td><td>4</td><td class="desc-col">Running config (equiv. of config_db.json)</td><td><code>PORT|* VLAN|* BGP_NEIGHBOR|*</code></td></tr>
+      <tr><td><span class="db-tag db-any">FLEX_COUNTER_DB</span></td><td>5</td><td class="desc-col">Flexible counter group configuration</td><td><code>FLEX_COUNTER_GROUP_TABLE:*</code></td></tr>
+      <tr><td><span class="db-tag db-6">STATE_DB</span></td><td>6</td><td class="desc-col">Operational / reconciled state of objects</td><td><code>PORT_TABLE:* VLAN_TABLE:* BGP_NEIGHBOR_TABLE:*</code></td></tr>
+      <tr><td><span class="db-tag db-any">ERROR_DB</span></td><td>8</td><td class="desc-col">SAI API error logs from syncd</td><td><code>SAIDUMP:*</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<!-- ── REDIS CLI ─────────────────────────────────────────────── -->
+<section>
+  <h2>Redis-CLI Commands</h2>
+  <table>
+    <thead><tr>
+      <th class="cmd-col">Command</th><th class="desc-col">Description</th><th class="db-col">DB</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><code>redis-cli -h 172.20.20.2 ping</code></td>
+        <td>Test connectivity to SONiC Redis</td>
+        <td><span class="db-tag db-any">any</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -h 172.20.20.2 -n 4 keys '*'</code></td>
+        <td>List all keys in CONFIG_DB</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 hgetall "PORT|Ethernet0"</code></td>
+        <td>Get all fields of a port config entry</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 hget "PORT|Ethernet0" speed</code></td>
+        <td>Get single field from a hash</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 0 keys 'ROUTE_TABLE:*'</code></td>
+        <td>List all route entries</td>
+        <td><span class="db-tag db-0">APPL_DB(0)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 0 hgetall "ROUTE_TABLE:192.168.1.0/24"</code></td>
+        <td>Show nexthop for a specific prefix</td>
+        <td><span class="db-tag db-0">APPL_DB(0)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 1 keys 'ASIC_STATE:SAI_OBJECT_TYPE_PORT:*'</code></td>
+        <td>List all SAI port objects</td>
+        <td><span class="db-tag db-1">ASIC_DB(1)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 2 hgetall "COUNTERS_PORT_NAME_MAP"</code></td>
+        <td>Get port-name → OID mapping</td>
+        <td><span class="db-tag db-2">COUNTERS_DB(2)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 2 hget "COUNTERS:&lt;OID&gt;" SAI_PORT_STAT_IF_IN_OCTETS</code></td>
+        <td>Get RX byte counter for a port OID</td>
+        <td><span class="db-tag db-2">COUNTERS_DB(2)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 6 hgetall "PORT_TABLE:Ethernet0"</code></td>
+        <td>Get operational state of Ethernet0</td>
+        <td><span class="db-tag db-6">STATE_DB(6)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 hset "PORT|Ethernet0" admin_status up</code></td>
+        <td>Modify a CONFIG_DB field (admin up)</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 subscribe "__keyevent@4__:hset"</code></td>
+        <td>Subscribe to CONFIG_DB write events</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 config set notify-keyspace-events KEA</code></td>
+        <td>Enable keyspace notifications (needed for pub/sub)</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 0 monitor</code></td>
+        <td>Stream ALL Redis commands in real-time (debug)</td>
+        <td><span class="db-tag db-any">any</span></td>
+      </tr>
+      <tr>
+        <td><code>redis-cli -n 4 scan 0 match 'BGP_NEIGHBOR|*' count 100</code></td>
+        <td>Cursor-based scan for BGP neighbors</td>
+        <td><span class="db-tag db-4">CONFIG_DB(4)</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+
+<!-- ── SONIC CLI WRAPPERS ─────────────────────────────────────── -->
+<section>
+  <h2>SONiC show commands (DB wrappers)</h2>
+  <table>
+    <thead><tr>
+      <th class="cmd-col">Command</th><th class="desc-col">What it reads</th><th class="db-col">Underlying DB</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><code>show interfaces status</code></td><td>Port oper/admin state + speed</td><td><span class="db-tag db-0">APPL_DB</span></td></tr>
+      <tr><td><code>show interfaces counters</code></td><td>RX/TX bytes, errors, drops</td><td><span class="db-tag db-2">COUNTERS_DB</span></td></tr>
+      <tr><td><code>show ip route</code></td><td>FIB routes from orchagent</td><td><span class="db-tag db-0">APPL_DB</span></td></tr>
+      <tr><td><code>show ip bgp summary</code></td><td>BGP session state</td><td><span class="db-tag db-6">STATE_DB</span></td></tr>
+      <tr><td><code>show vlan brief</code></td><td>VLAN membership</td><td><span class="db-tag db-4">CONFIG_DB</span></td></tr>
+      <tr><td><code>show arp</code></td><td>ARP/neighbor table</td><td><span class="db-tag db-0">APPL_DB</span></td></tr>
+      <tr><td><code>show platform summary</code></td><td>Hardware platform info</td><td><span class="db-tag db-6">STATE_DB</span></td></tr>
+      <tr><td><code>show logging</code></td><td>Syslog from all daemons</td><td><span class="db-tag db-any">LOGLEVEL_DB</span></td></tr>
+      <tr><td><code>show runningconfiguration all</code></td><td>Full CONFIG_DB dump as JSON</td><td><span class="db-tag db-4">CONFIG_DB</span></td></tr>
+      <tr><td><code>sonic-db-cli CONFIG_DB keys '*'</code></td>
+          <td>SONiC native DB CLI (preferred over redis-cli inside switch)</td>
+          <td><span class="db-tag db-4">CONFIG_DB</span></td></tr>
+      <tr><td><code>sonic-db-cli APPL_DB hgetall "ROUTE_TABLE:0.0.0.0/0"</code></td>
+          <td>Default route entry</td>
+          <td><span class="db-tag db-0">APPL_DB</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<!-- ── QUICK CARDS ────────────────────────────────────────────── -->
+<section>
+  <h2>Quick Reference</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="color:var(--green)">Common Key Patterns</h3>
+      <ul>
+        <li><code>PORT|Ethernet*</code> — port config</li>
+        <li><code>VLAN|Vlan*</code> — vlan config</li>
+        <li><code>BGP_NEIGHBOR|*</code> — BGP peers</li>
+        <li><code>DEVICE_METADATA|localhost</code> — hostname/ASN</li>
+        <li><code>ROUTE_TABLE:*</code> — IP routes</li>
+        <li><code>NEIGH_TABLE:*</code> — ARP entries</li>
+        <li><code>ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:*</code> — ASIC routes</li>
+        <li><code>COUNTERS:oid:0x*</code> — port counters by OID</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--orange)">Useful SAI Counter Fields</h3>
+      <ul>
+        <li><code>SAI_PORT_STAT_IF_IN_OCTETS</code></li>
+        <li><code>SAI_PORT_STAT_IF_OUT_OCTETS</code></li>
+        <li><code>SAI_PORT_STAT_IF_IN_ERRORS</code></li>
+        <li><code>SAI_PORT_STAT_IF_OUT_ERRORS</code></li>
+        <li><code>SAI_PORT_STAT_IF_IN_DISCARDS</code></li>
+        <li><code>SAI_PORT_STAT_IF_OUT_DISCARDS</code></li>
+        <li><code>SAI_PORT_STAT_IF_IN_UCAST_PKTS</code></li>
+        <li><code>SAI_PORT_STAT_IF_OUT_UCAST_PKTS</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="note">
+  <strong>Tip:</strong> Inside the SONiC container/shell prefer <code>sonic-db-cli</code> over raw <code>redis-cli</code> — it uses the DB connector config at <code>/var/run/redis/sonic-db/database_config.json</code> and handles Unix socket paths automatically. From outside (containerlab host) use <code>redis-cli -h 172.20.20.2 -p 6379 -n &lt;DB_ID&gt;</code>.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+  "name": "project_sonic",
+  "type": "clab",
+  "clab": {
+    "config": {
+      "prefix": "clab",
+      "mgmt": {
+        "network": "clab",
+        "bridge": "br-1b6653a2f1f9",
+        "ipv4-subnet": "172.20.20.0/24",
+        "ipv4-gw": "172.20.20.1",
+        "ipv6-subnet": "3fff:172:20:20::/64",
+        "ipv6-gw": "3fff:172:20:20::1",
+        "external-access": true
+      }
+    }
+  },
+  "ssh-pub-keys": [],
+  "nodes": {
+    "sonic1": {
+      "index": "0",
+      "shortname": "sonic1",
+      "longname": "clab-project_sonic-sonic1",
+      "fqdn": "sonic1.project_sonic.io",
+      "group": "",
+      "labdir": "/home/nithiroj/modern-network-2025/project_sonic/clab-project_sonic/sonic1",
+      "kind": "sonic-vs",
+      "image": "docker-sonic-vs:latest",
+      "mgmt-net": "",
+      "mgmt-intf": "",
+      "mgmt-ipv4-address": "172.20.20.2",
+      "mgmt-ipv4-prefix-length": 24,
+      "mgmt-ipv6-address": "3fff:172:20:20::2",
+      "mgmt-ipv6-prefix-length": 64,
+      "mac-address": "",
+      "labels": {
+        "clab-mgmt-net-bridge": "br-1b6653a2f1f9",
+        "clab-node-group": "",
+        "clab-node-kind": "sonic-vs",
+        "clab-node-lab-dir": "/home/nithiroj/modern-network-2025/project_sonic/clab-project_sonic/sonic1",
+        "clab-node-longname": "clab-project_sonic-sonic1",
+        "clab-node-name": "sonic1",
+        "clab-node-type": "",
+        "clab-owner": "nithiroj",
+        "clab-topo-file": "/home/nithiroj/modern-network-2025/project_sonic/project.sonic.clab.yml",
+        "containerlab": "project_sonic"
+      },
+      "port-bindings": [
+      ]
+    }
+  },
+  "links": [
+  ]
+}

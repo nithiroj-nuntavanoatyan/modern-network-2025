@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SONiC DB Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --bg:       #0a0e13;
+  --surface:  #111820;
+  --surface2: #162030;
+  --border:   #1e2d3d;
+  --accent:   #00d4ff;
+  --accent2:  #00ff9d;
+  --warn:     #ffb800;
+  --danger:   #ff4560;
+  --text:     #cdd9e5;
+  --muted:    #546e7a;
+  --up:       #00e676;
+  --down:     #ff4560;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── GRID LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 56px 1fr;
+  min-height: 100vh;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: #000; font-weight: 800;
+}
+
+.conn-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--down);
+  animation: pulse-red 2s infinite;
+}
+
+.status-dot.up {
+  background: var(--up);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-red {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,69,96,0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(255,69,96,0); }
+}
+@keyframes pulse-green {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,230,118,0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(0,230,118,0); }
+}
+
+.conn-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+.conn-btn:hover { background: var(--border); }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+.nav-section {
+  padding: 0 12px;
+  margin-bottom: 8px;
+}
+
+.nav-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 12px 4px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+
+.nav-item.active {
+  background: rgba(0,212,255,0.08);
+  color: var(--accent);
+  border-color: rgba(0,212,255,0.2);
+}
+
+.nav-icon { font-size: 15px; width: 20px; text-align: center; }
+
+/* ── MAIN ── */
+.main {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* ── PANELS ── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+.panel-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.panel-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 20px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── STAT CARDS ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+
+.stat-card.up::before    { background: var(--up); }
+.stat-card.down::before  { background: var(--down); }
+.stat-card.unknown::before { background: #e3b341; }
+
+.stat-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.stat-lbl {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ── TABLE ── */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.refresh-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: all 0.2s;
+}
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead tr { background: rgba(255,255,255,0.02); }
+
+th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(30,45,61,0.5);
+  font-family: 'IBM Plex Mono', monospace;
+  vertical-align: middle;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(0,212,255,0.03); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.badge-up   { background: rgba(0,230,118,0.12); color: var(--up); border: 1px solid rgba(0,230,118,0.3); }
+.badge-down { background: rgba(255,69,96,0.12);  color: var(--down); border: 1px solid rgba(255,69,96,0.3); }
+.badge-unk  { background: rgba(84,110,122,0.2);  color: var(--muted); border: 1px solid var(--border); }
+
+/* ── CONNECT MODAL ── */
+.modal-bg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-bg.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  width: 400px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+
+.modal h2 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.form-group { margin-bottom: 14px; }
+
+.form-group label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.form-group input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-group input:focus { border-color: var(--accent); }
+
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+.btn-primary {
+  flex: 1;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover { opacity: 0.85; }
+
+.btn-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+
+/* ── RAW EXPLORER ── */
+.explorer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.explorer-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.explorer-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.explorer-toolbar select,
+.explorer-toolbar input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  outline: none;
+}
+.explorer-toolbar select { width: 140px; }
+.explorer-toolbar input  { flex: 1; }
+
+.explorer-toolbar button {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.key-list {
+  height: 360px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.key-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  transition: all 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.key-item:hover { background: var(--surface2); color: var(--accent); }
+
+.value-box {
+  height: 360px;
+  overflow-y: auto;
+  padding: 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--accent2);
+  background: var(--bg);
+}
+
+/* ── LOADING ── */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  gap: 10px;
+}
+
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── VLAN PANEL ── */
+.vlan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  margin-top: 4px;
+}
+.vlan-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.vlan-card:hover { border-color: rgba(0,212,255,0.3); }
+.vlan-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.vlan-id-badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.vlan-name {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.vlan-meta {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.vlan-meta-item {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.vlan-meta-item span { color: var(--accent2); }
+.vlan-members-title {
+  padding: 8px 16px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+.vlan-member-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px 80px;
+  padding: 7px 16px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  border-top: 1px solid rgba(30,45,61,0.5);
+  align-items: center;
+  transition: background 0.1s;
+}
+.vlan-member-row:hover { background: rgba(0,212,255,0.03); }
+.vlan-no-members {
+  padding: 12px 16px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.tag-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: "IBM Plex Mono", monospace;
+}
+.tag-tagged   { background: rgba(188,140,255,0.15); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); }
+.tag-untagged { background: rgba(84,110,122,0.15);  color: var(--muted); border: 1px solid var(--border); }
+.vlan-ip {
+  padding: 6px 16px 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--accent2);
+}
+
+/* ── MODIFY PANEL ── */
+.mod-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.mod-section-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+.mod-section-icon {
+  font-size: 16px;
+}
+.mod-body {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.mod-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mod-field label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+.mod-field input,
+.mod-field select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.mod-field input:focus,
+.mod-field select:focus { border-color: var(--accent); }
+.mod-actions {
+  padding: 0 18px 18px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-action {
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: var(--accent);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+.btn-action:hover { background: rgba(0,212,255,0.2); }
+.btn-action.danger {
+  background: rgba(255,69,96,0.1);
+  border-color: rgba(255,69,96,0.3);
+  color: var(--down);
+}
+.btn-action.danger:hover { background: rgba(255,69,96,0.2); }
+.btn-action.success {
+  background: rgba(0,230,118,0.1);
+  border-color: rgba(0,230,118,0.3);
+  color: var(--up);
+}
+.btn-action.success:hover { background: rgba(0,230,118,0.2); }
+.action-log {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  min-height: 80px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.log-ok   { color: var(--up);   }
+.log-err  { color: var(--down); }
+.log-info { color: var(--muted);}
+
+/* ── DB CHECK LABELS ── */
+.db-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.db-check:hover { border-color: var(--accent); color: var(--text); }
+.db-check input { accent-color: var(--accent); cursor: pointer; }
+
+/* ── FEED ROW ── */
+.feed-row {
+  display: grid;
+  grid-template-columns: 70px 110px 90px 1fr 1fr;
+  border-bottom: 1px solid rgba(30,45,61,0.4);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  animation: fadeIn 0.3s ease;
+  transition: background 0.15s;
+}
+.feed-row:hover { background: rgba(0,212,255,0.03); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.feed-cell {
+  padding: 8px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── DEVICE INFO ── */
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.device-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.device-card-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 6px;
+}
+
+.device-card-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.error-box {
+  background: rgba(255,69,96,0.08);
+  border: 1px solid rgba(255,69,96,0.3);
+  border-radius: 8px;
+  padding: 14px 18px;
+  color: var(--down);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">S</div>
+      SONiC·DB
+    </div>
+    <div class="conn-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText" style="color:var(--muted)">Disconnected</span>
+      <button class="conn-btn" onclick="openModal()">⚙ Configure</button>
+      <button class="conn-btn" onclick="refreshCurrent()">↺ Refresh</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-label">Monitor</div>
+    <div class="nav-section">
+      <div class="nav-item active" onclick="showPanel('overview')" id="nav-overview">
+        <span class="nav-icon">◈</span> Overview
+      </div>
+      <div class="nav-item" onclick="showPanel('interfaces')" id="nav-interfaces">
+        <span class="nav-icon">⬡</span> Interfaces
+      </div>
+      <div class="nav-item" onclick="showPanel('routes')" id="nav-routes">
+        <span class="nav-icon">⇄</span> Routes
+      </div>
+      <div class="nav-item" onclick="showPanel('counters')" id="nav-counters">
+        <span class="nav-icon">◉</span> Counters
+      </div>
+      <div class="nav-item" onclick="showPanel('bgp')" id="nav-bgp">
+        <span class="nav-icon">⬡</span> BGP
+      </div>
+      <div class="nav-item" onclick="showPanel('vlans')" id="nav-vlans">
+        <span class="nav-icon">▦</span> VLANs
+      </div>
+    </div>
+    <div class="nav-label">Tools</div>
+    <div class="nav-section">
+      <div class="nav-item" onclick="showPanel('explorer')" id="nav-explorer">
+        <span class="nav-icon">⌕</span> DB Explorer
+      </div>
+      <div class="nav-item" onclick="showPanel('pubsub')" id="nav-pubsub">
+        <span class="nav-icon">◎</span> Live Feed
+        <span id="pubsubDot" style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--muted)"></span>
+      </div>
+      <div class="nav-item" onclick="showPanel('modify')" id="nav-modify">
+        <span class="nav-icon">✎</span> Modify
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div class="panel active" id="panel-overview">
+      <div class="panel-title">Overview</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="panel-sub" style="margin-bottom:0">Device metadata · DEVICE_METADATA|localhost · CONFIG_DB</div>
+      <button class="refresh-btn" onclick="loadOverview()">↺ Refresh</button>
+    </div>
+      <div id="deviceInfo"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      <div class="stat-grid" id="overviewStats"></div>
+    </div>
+
+    <!-- INTERFACES -->
+    <div class="panel" id="panel-interfaces">
+      <div class="panel-title">Interfaces</div>
+      <div class="panel-sub">CONFIG_DB(4) + APPL_DB(0) + STATE_DB(6) · PORT|* PORT_TABLE:*</div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Port Status</span>
+          <button class="refresh-btn" onclick="loadInterfaces()">↺ Refresh</button>
+        </div>
+        <div id="ifaceTable"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- ROUTES -->
+    <div class="panel" id="panel-routes">
+      <div class="panel-title">Routes</div>
+      <div class="panel-sub">APPL_DB(0) · ROUTE_TABLE:*</div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Route Table</span>
+          <button class="refresh-btn" onclick="loadRoutes()">↺ Refresh</button>
+        </div>
+        <div id="routeTable"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- COUNTERS -->
+    <div class="panel" id="panel-counters">
+      <div class="panel-title">Port Counters</div>
+      <div class="panel-sub">COUNTERS_DB(2) · COUNTERS:* · SAI_PORT_STAT_*</div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">Traffic Counters</span>
+          <button class="refresh-btn" onclick="loadCounters()">↺ Refresh</button>
+        </div>
+        <div id="counterTable"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- BGP -->
+    <div class="panel" id="panel-bgp">
+      <div class="panel-title">BGP Neighbors</div>
+      <div class="panel-sub">CONFIG_DB(4) · BGP_NEIGHBOR|*</div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-title">BGP Sessions</span>
+          <button class="refresh-btn" onclick="loadBGP()">↺ Refresh</button>
+        </div>
+        <div id="bgpTable"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- DB EXPLORER -->
+    <div class="panel" id="panel-explorer">
+      <div class="panel-title">DB Explorer</div>
+      <div class="panel-sub">Browse raw Redis keys across all SONiC databases</div>
+      <div class="explorer-grid">
+        <div class="explorer-box">
+          <div class="explorer-toolbar">
+            <select id="expDb">
+              <option value="0">APPL_DB (0)</option>
+              <option value="1">ASIC_DB (1)</option>
+              <option value="2">COUNTERS_DB (2)</option>
+              <option value="3">LOGLEVEL_DB (3)</option>
+              <option value="4" selected>CONFIG_DB (4)</option>
+              <option value="5">PFC_WD_DB (5)</option>
+              <option value="6">STATE_DB (6)</option>
+              <option value="7">SNMP_OVERLAY_DB (7)</option>
+              <option value="8">ERROR_DB (8)</option>
+            </select>
+            <input type="text" id="expPattern" value="*" placeholder="pattern">
+            <button onclick="loadKeys()">Search</button>
+          </div>
+          <div class="key-list" id="keyList"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+        <div class="explorer-box">
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);">VALUE INSPECTOR</div>
+          <div class="value-box" id="valueBox">← Select a key</div>
+        </div>
+      </div>
+    </div>
+
+  <!-- VLAN PANEL -->
+  <div class="panel" id="panel-vlans">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div>
+        <div class="panel-title">VLANs</div>
+        <div class="panel-sub">CONFIG_DB(4) · VLAN|* · VLAN_MEMBER|* · STATE_DB(6) · VLAN_TABLE:*</div>
+      </div>
+      <button class="refresh-btn" onclick="loadVlans()">↺ Refresh</button>
+    </div>
+
+    <!-- Summary stats -->
+    <div id="vlanStats" style="display:flex;gap:12px;margin-bottom:20px"></div>
+
+    <!-- VLAN cards -->
+    <div id="vlanContent">
+      <div class="loading"><div class="spinner"></div>Loading...</div>
+    </div>
+  </div>
+
+  <!-- MODIFY PANEL -->
+  <div class="panel" id="panel-modify">
+    <div class="panel-title">Modify</div>
+    <div class="panel-sub">Write actions to CONFIG_DB · changes take effect via orchagent</div>
+
+    <!-- Interface Actions -->
+    <div class="mod-section">
+      <div class="mod-section-header">
+        <span class="mod-section-icon">⬡</span> Interface
+      </div>
+      <div class="mod-body">
+        <div class="mod-field">
+          <label>Interface Name</label>
+          <input type="text" id="mod-iface-name" placeholder="e.g. Ethernet0">
+        </div>
+        <div class="mod-field">
+          <label>MTU</label>
+          <input type="number" id="mod-iface-mtu" placeholder="e.g. 9100">
+        </div>
+        <div class="mod-field">
+          <label>Description</label>
+          <input type="text" id="mod-iface-desc" placeholder="uplink to spine">
+        </div>
+        <div class="mod-field">
+          <label>IP Address (CIDR)</label>
+          <input type="text" id="mod-iface-ip" placeholder="e.g. 10.0.0.1/24">
+        </div>
+      </div>
+      <div class="mod-actions">
+        <button class="btn-action success" onclick="ifaceAction('startup')">▲ Startup</button>
+        <button class="btn-action danger"  onclick="ifaceAction('shutdown')">▼ Shutdown</button>
+        <button class="btn-action"         onclick="ifaceAction('set_mtu')">Set MTU</button>
+        <button class="btn-action"         onclick="ifaceAction('set_description')">Set Description</button>
+        <button class="btn-action success" onclick="ifaceAction('add_ip')">+ Add IP</button>
+        <button class="btn-action danger"  onclick="ifaceAction('remove_ip')">- Remove IP</button>
+      </div>
+    </div>
+
+    <!-- VLAN Actions -->
+    <div class="mod-section">
+      <div class="mod-section-header">
+        <span class="mod-section-icon">◈</span> VLAN
+      </div>
+      <div class="mod-body">
+        <div class="mod-field">
+          <label>VLAN ID</label>
+          <input type="number" id="mod-vlan-id" placeholder="e.g. 100">
+        </div>
+        <div class="mod-field">
+          <label>Member Port</label>
+          <input type="text" id="mod-vlan-member" placeholder="e.g. Ethernet4">
+        </div>
+        <div class="mod-field">
+          <label>Tagging Mode</label>
+          <select id="mod-vlan-mode">
+            <option value="untagged">Untagged</option>
+            <option value="tagged">Tagged</option>
+          </select>
+        </div>
+      </div>
+      <div class="mod-actions">
+        <button class="btn-action success" onclick="vlanAction('add')">+ Add VLAN</button>
+        <button class="btn-action danger"  onclick="vlanAction('remove')">- Remove VLAN</button>
+        <button class="btn-action success" onclick="vlanAction('add_member')">+ Add Member</button>
+        <button class="btn-action danger"  onclick="vlanAction('remove_member')">- Remove Member</button>
+      </div>
+    </div>
+
+    <!-- BGP Actions -->
+    <div class="mod-section">
+      <div class="mod-section-header">
+        <span class="mod-section-icon">⇄</span> BGP Neighbor
+      </div>
+      <div class="mod-body">
+        <div class="mod-field">
+          <label>Peer IP</label>
+          <input type="text" id="mod-bgp-peer" placeholder="e.g. 10.0.0.2">
+        </div>
+        <div class="mod-field">
+          <label>ASN</label>
+          <input type="number" id="mod-bgp-asn" placeholder="e.g. 65002">
+        </div>
+        <div class="mod-field">
+          <label>Name / Description</label>
+          <input type="text" id="mod-bgp-name" placeholder="spine-01">
+        </div>
+      </div>
+      <div class="mod-actions">
+        <button class="btn-action success" onclick="bgpAction('add')">+ Add Neighbor</button>
+        <button class="btn-action success" onclick="bgpAction('startup')">▲ Startup</button>
+        <button class="btn-action danger"  onclick="bgpAction('shutdown')">▼ Shutdown</button>
+        <button class="btn-action danger"  onclick="bgpAction('remove')">- Remove</button>
+      </div>
+    </div>
+
+    <!-- Raw Key Write -->
+    <div class="mod-section">
+      <div class="mod-section-header">
+        <span class="mod-section-icon">⌕</span> Raw Key Write
+      </div>
+      <div class="mod-body">
+        <div class="mod-field">
+          <label>DB</label>
+          <select id="mod-raw-db">
+            <option value="0">APPL_DB (0)</option>
+            <option value="1">ASIC_DB (1)</option>
+            <option value="2">COUNTERS_DB (2)</option>
+            <option value="4" selected>CONFIG_DB (4)</option>
+            <option value="6">STATE_DB (6)</option>
+          </select>
+        </div>
+        <div class="mod-field">
+          <label>Key</label>
+          <input type="text" id="mod-raw-key" placeholder="e.g. PORT|Ethernet0">
+        </div>
+        <div class="mod-field">
+          <label>Field (for hash)</label>
+          <input type="text" id="mod-raw-field" placeholder="e.g. admin_status">
+        </div>
+        <div class="mod-field">
+          <label>Value</label>
+          <input type="text" id="mod-raw-value" placeholder="e.g. up">
+        </div>
+      </div>
+      <div class="mod-actions">
+        <button class="btn-action" onclick="rawWrite()">✎ Write</button>
+      </div>
+    </div>
+
+    <!-- Action Log -->
+    <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Action Log</div>
+    <div class="action-log" id="actionLog">
+      <span class="log-info">// Actions and results will appear here</span>
+    </div>
+  </div>
+
+  <!-- LIVE FEED PANEL -->
+  <div class="panel" id="panel-pubsub">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div>
+        <div class="panel-title">Live Event Feed</div>
+        <div class="panel-sub">Redis pub/sub · keyspace notifications · real-time DB changes</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="refresh-btn" onclick="clearFeed()">✕ Clear</button>
+        <button class="refresh-btn" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+        <button class="conn-btn" id="subBtn" onclick="toggleSubscription()">▶ Start</button>
+      </div>
+    </div>
+
+    <!-- DB filter checkboxes -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;align-self:center">WATCH:</span>
+      <label class="db-check"><input type="checkbox" value="0"  checked> APPL_DB</label>
+      <label class="db-check"><input type="checkbox" value="1"> ASIC_DB</label>
+      <label class="db-check"><input type="checkbox" value="2"> COUNTERS_DB</label>
+      <label class="db-check"><input type="checkbox" value="4"  checked> CONFIG_DB</label>
+      <label class="db-check"><input type="checkbox" value="6"  checked> STATE_DB</label>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace" id="eventCount">0 events</span>
+    </div>
+
+    <!-- Event feed -->
+    <div class="table-wrap" style="height:calc(100vh - 280px);overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:grid;grid-template-columns:70px 110px 90px 1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
+        <div style="padding:8px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Time</div>
+        <div style="padding:8px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">DB</div>
+        <div style="padding:8px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Operation</div>
+        <div style="padding:8px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Key</div>
+        <div style="padding:8px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Value</div>
+      </div>
+      <div id="feedRows" style="overflow-y:auto;flex:1">
+        <div class="loading" id="feedPlaceholder">
+          <div>Press <strong style="color:var(--accent)">▶ Start</strong> to begin watching Redis events</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </main>
+</div>
+
+<!-- CONNECT MODAL -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>⚙ SSH Connection</h2>
+    <div class="form-group">
+      <label>SONiC IP Address</label>
+      <input type="text" id="cfgHost" value="172.20.20.2">
+    </div>
+    <div class="form-group">
+      <label>SSH Username</label>
+      <input type="text" id="cfgUser" value="admin">
+    </div>
+    <div class="form-group">
+      <label>SSH Password</label>
+      <input type="password" id="cfgPass" value="YourPaSsWorD">
+    </div>
+    <div id="modalError"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="doConnect()">Connect</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";  // same origin
+
+// ── Navigation ──
+function showPanel(name) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  document.getElementById("panel-" + name).classList.add("active");
+  document.getElementById("nav-" + name).classList.add("active");
+
+  // lazy load
+  const loaders = {
+    interfaces: loadInterfaces,
+    routes:     loadRoutes,
+    counters:   loadCounters,
+    bgp:        loadBGP,
+    overview:   loadOverview,
+    explorer:   loadKeys,
+    vlans:      loadVlans,
+  };
+  if (loaders[name]) loaders[name]();
+}
+
+// ── Status ──
+async function checkStatus() {
+  try {
+    const r = await fetch(API + "/api/status");
+    const d = await r.json();
+    const dot  = document.getElementById("statusDot");
+    const text = document.getElementById("statusText");
+    if (d.connected) {
+      dot.classList.add("up");
+      text.textContent = d.host;
+      text.style.color = "var(--up)";
+    } else {
+      dot.classList.remove("up");
+      text.textContent = "Disconnected";
+      text.style.color = "var(--muted)";
+    }
+  } catch(e) {
+    document.getElementById("statusText").textContent = "Backend offline";
+  }
+}
+
+// ── Refresh current panel ──
+function refreshCurrent() {
+  checkStatus();
+  const active = document.querySelector(".panel.active");
+  if (!active) return;
+  const id = active.id.replace("panel-", "");
+  const loaders = {
+    interfaces: loadInterfaces,
+    routes:     loadRoutes,
+    counters:   loadCounters,
+    bgp:        loadBGP,
+    overview:   loadOverview,
+    explorer:   loadKeys,
+    vlans:      loadVlans,
+  };
+  if (loaders[id]) loaders[id]();
+}
+
+// ── Modal ──
+function openModal()  { document.getElementById("modalBg").classList.add("open"); }
+function closeModal() { document.getElementById("modalBg").classList.remove("open"); }
+
+async function doConnect() {
+  const errEl = document.getElementById("modalError");
+  errEl.innerHTML = "";
+  const body = {
+    host:     document.getElementById("cfgHost").value,
+    username: document.getElementById("cfgUser").value,
+    password: document.getElementById("cfgPass").value,
+  };
+  try {
+    errEl.innerHTML = '<div class="loading"><div class="spinner"></div>Connecting...</div>';
+    const r = await fetch(API + "/api/connect", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      closeModal();
+      checkStatus();
+      loadOverview();
+    } else {
+      errEl.innerHTML = `<div class="error-box">Error: ${d.error}</div>`;
+    }
+  } catch(e) {
+    errEl.innerHTML = `<div class="error-box">Cannot reach backend: ${e}</div>`;
+  }
+}
+
+// ── Overview ──
+async function loadOverview() {
+  document.getElementById("deviceInfo").innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  document.getElementById("overviewStats").innerHTML = '';
+  try {
+    const [devRes, ifaceRes, routeRes, kernelRes] = await Promise.all([
+      fetch(API + "/api/device"),
+      fetch(API + "/api/interfaces"),
+      fetch(API + "/api/routes"),
+      fetch(API + "/api/kernel_interfaces"),
+    ]);
+    const d      = await devRes.json();
+    const ifaces = await ifaceRes.json();
+    const routes = await routeRes.json();
+    const kernel = await kernelRes.json();
+
+    const info = document.getElementById("deviceInfo");
+    if (d.error) { info.innerHTML = `<div class="error-box">${d.error}</div>`; return; }
+
+    const fields = [
+      ["hostname",      "Hostname"],
+      ["type",          "Device Type"],
+      ["hwsku",         "Hardware SKU"],
+      ["platform",      "Platform"],
+      ["mac",           "MAC Address"],
+      ["bgp_asn",       "BGP ASN"],
+      ["deployment_id", "Deployment ID"],
+    ];
+
+    const cards = fields.filter(([k]) => d[k]).map(([k, label]) =>
+      `<div class="device-card">
+        <div class="device-card-label">${label}</div>
+        <div class="device-card-val">${d[k]}</div>
+      </div>`
+    ).join("");
+
+    info.innerHTML = cards
+      ? `<div class="device-grid">${cards}</div>`
+      : '<div class="loading">No device metadata found</div>';
+
+    // Count using kernel state (source of truth for actual link state)
+    let upCount = 0, downCount = 0, unknownCount = 0;
+    if (Array.isArray(ifaces)) {
+      ifaces.forEach(i => {
+        const k = kernel[i.name] || {};
+        const ks = k.kernel_state || "";
+        const flags = k.flags || "";
+        if (ks === "UP") {
+          upCount++;
+        } else if (ks === "UNKNOWN") {
+          // UNKNOWN + LOWER_UP = carrier present = functionally up
+          if (flags.includes("LOWER_UP")) unknownCount++;
+          else downCount++;
+        } else if (ks === "DOWN" || i.oper === "down") {
+          downCount++;
+        }
+      });
+    }
+
+    document.getElementById("overviewStats").innerHTML = `
+      <div class="stat-card">
+        <div class="stat-val">${Array.isArray(ifaces) ? ifaces.length : "?"}</div>
+        <div class="stat-lbl">Total Interfaces</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="showPanel('interfaces')">
+        <div class="stat-val" style="color:var(--up)">${upCount}</div>
+        <div class="stat-lbl">Ports Up</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="showPanel('interfaces')">
+        <div class="stat-val" style="color:#e3b341">${unknownCount}</div>
+        <div class="stat-lbl">Ports Unknown</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:'IBM Plex Mono',monospace">carrier present</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="showPanel('interfaces')">
+        <div class="stat-val" style="color:var(--down)">${downCount}</div>
+        <div class="stat-lbl">Ports Down</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="showPanel('routes')">
+        <div class="stat-val">${Array.isArray(routes) ? routes.length : "?"}</div>
+        <div class="stat-lbl">Routes</div>
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById("deviceInfo").innerHTML = `<div class="error-box">Failed to load: ${e}</div>`;
+  }
+}
+
+// ── Interfaces ──
+async function loadInterfaces() {
+  const el = document.getElementById("ifaceTable");
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    // Fetch Redis state + kernel state in parallel
+    const [ifaceRes, kernelRes] = await Promise.all([
+      fetch(API + "/api/interfaces"),
+      fetch(API + "/api/kernel_interfaces"),
+    ]);
+    const data   = await ifaceRes.json();
+    const kernel = await kernelRes.json();
+
+    if (data.error) { el.innerHTML = `<div class="error-box">${data.error}</div>`; return; }
+    if (!data.length) { el.innerHTML = '<div class="loading">No interfaces found</div>'; return; }
+
+    el.innerHTML = `<table>
+      <thead><tr>
+        <th>Interface</th><th>Type</th><th>Admin</th>
+        <th>Redis Oper</th><th>Kernel State</th>
+        <th>Speed</th><th>MTU</th><th>IP Address</th><th>Description</th>
+      </tr></thead>
+      <tbody>
+        ${data.map(i => {
+          const k = kernel[i.name] || {};
+          const kstate = k.kernel_state || "—";
+          const flags  = k.flags || "";
+          return `<tr>
+            <td style="font-weight:600">${i.name}</td>
+            <td>${typeBadge(i.type)}</td>
+            <td>${badge(i.admin)}</td>
+            <td>${badge(i.oper)}</td>
+            <td>${kernelBadge(kstate, flags)}</td>
+            <td>${i.speed && i.speed !== "—" ? i.speed + " M" : "—"}</td>
+            <td>${i.mtu || "—"}</td>
+            <td style="color:var(--accent2)">${[...i.ips_config, ...i.ips_applied].filter((v,j,a)=>a.indexOf(v)===j).join(", ") || "—"}</td>
+            <td style="color:var(--muted)">${i.description || "—"}</td>
+          </tr>`;
+        }).join("")}
+      </tbody></table>`;
+  } catch(e) {
+    el.innerHTML = `<div class="error-box">Error: ${e}</div>`;
+  }
+}
+
+// ── Routes ──
+async function loadRoutes() {
+  const el = document.getElementById("routeTable");
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    const r = await fetch(API + "/api/routes");
+    const data = await r.json();
+    if (data.error) { el.innerHTML = `<div class="error-box">${data.error}</div>`; return; }
+    if (!data.length) { el.innerHTML = '<div class="loading">No routes found</div>'; return; }
+
+    el.innerHTML = `<table>
+      <thead><tr><th>Prefix</th><th>Next Hop</th><th>Interface</th><th>Distance</th></tr></thead>
+      <tbody>
+        ${data.map(r => `<tr>
+          <td style="color:#fff">${r.prefix}</td>
+          <td style="color:var(--accent)">${r.nexthop || "—"}</td>
+          <td>${r.ifname || "—"}</td>
+          <td>${r.distance || "—"}</td>
+        </tr>`).join("")}
+      </tbody></table>`;
+  } catch(e) {
+    el.innerHTML = `<div class="error-box">Error: ${e}</div>`;
+  }
+}
+
+// ── Counters ──
+function fmt(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + " GB";
+  if (n >= 1e6) return (n/1e6).toFixed(2) + " MB";
+  if (n >= 1e3) return (n/1e3).toFixed(1) + " KB";
+  return n + " B";
+}
+
+async function loadCounters() {
+  const el = document.getElementById("counterTable");
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    const r = await fetch(API + "/api/counters");
+    const data = await r.json();
+    if (data.error) { el.innerHTML = `<div class="error-box">${data.error}</div>`; return; }
+    if (!data.length) { el.innerHTML = '<div class="loading">No counter data</div>'; return; }
+
+    el.innerHTML = `<table>
+      <thead><tr><th>Port</th><th>RX Bytes</th><th>TX Bytes</th><th>RX Errors</th><th>TX Errors</th><th>RX Drops</th><th>TX Drops</th></tr></thead>
+      <tbody>
+        ${data.map(c => `<tr>
+          <td>${c.port}</td>
+          <td style="color:var(--accent2)">${fmt(c.rx_bytes)}</td>
+          <td style="color:var(--accent)">${fmt(c.tx_bytes)}</td>
+          <td style="color:${c.rx_errors>0?'var(--warn)':'var(--muted)'}">${c.rx_errors}</td>
+          <td style="color:${c.tx_errors>0?'var(--warn)':'var(--muted)'}">${c.tx_errors}</td>
+          <td style="color:${c.rx_drops>0?'var(--down)':'var(--muted)'}">${c.rx_drops}</td>
+          <td style="color:${c.tx_drops>0?'var(--down)':'var(--muted)'}">${c.tx_drops}</td>
+        </tr>`).join("")}
+      </tbody></table>`;
+  } catch(e) {
+    el.innerHTML = `<div class="error-box">Error: ${e}</div>`;
+  }
+}
+
+// ── BGP ──
+async function loadBGP() {
+  const el = document.getElementById("bgpTable");
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    const r = await fetch(API + "/api/bgp");
+    const data = await r.json();
+    if (data.error) { el.innerHTML = `<div class="error-box">${data.error}</div>`; return; }
+    if (!data.length) { el.innerHTML = '<div class="loading">No BGP neighbors configured</div>'; return; }
+
+    el.innerHTML = `<table>
+      <thead><tr><th>Peer</th><th>ASN</th><th>Name</th><th>State</th><th>Admin</th></tr></thead>
+      <tbody>
+        ${data.map(b => `<tr>
+          <td style="color:var(--accent)">${b.peer}</td>
+          <td>${b.asn}</td>
+          <td style="color:var(--muted)">${b.name || "—"}</td>
+          <td>${badge(b.state)}</td>
+          <td>${badge(b.admin)}</td>
+        </tr>`).join("")}
+      </tbody></table>`;
+  } catch(e) {
+    el.innerHTML = `<div class="error-box">Error: ${e}</div>`;
+  }
+}
+
+// ── DB Explorer ──
+async function loadKeys() {
+  const db      = document.getElementById("expDb").value;
+  const pattern = document.getElementById("expPattern").value || "*";
+  const el      = document.getElementById("keyList");
+  el.innerHTML  = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const r    = await fetch(`${API}/api/keys?db=${db}&pattern=${encodeURIComponent(pattern)}`);
+    const keys = await r.json();
+    if (keys.error) { el.innerHTML = `<div style="padding:12px;color:var(--down);font-size:11px">${keys.error}</div>`; return; }
+    el.innerHTML = keys.map(k =>
+      `<div class="key-item" onclick="loadValue(${db}, '${k.replace(/'/g,"\\'")}')" title="${k}">${k}</div>`
+    ).join("") || '<div style="padding:12px;color:var(--muted);font-size:11px">No keys found</div>';
+  } catch(e) {
+    el.innerHTML = `<div style="padding:12px;color:var(--down);font-size:11px">Error: ${e}</div>`;
+  }
+}
+
+async function loadValue(db, key) {
+  const el = document.getElementById("valueBox");
+  el.textContent = "Loading...";
+  try {
+    const r = await fetch(`${API}/api/key?db=${db}&key=${encodeURIComponent(key)}`);
+    const d = await r.json();
+    if (d.error) { el.textContent = "Error: " + d.error; return; }
+    el.textContent = `// ${d.key}\n// type: ${d.type}\n\n` + JSON.stringify(d.value, null, 2);
+  } catch(e) {
+    el.textContent = "Error: " + e;
+  }
+}
+
+// ── Helpers ──
+const TYPE_COLORS = {
+  port: ["#1a3a4a","#00d4ff"],
+  vlan: ["#1a3a2a","#00ff9d"],
+  loopback: ["#2a2a1a","#e3b341"],
+  portchannel: ["#2a1a3a","#bc8cff"],
+  bridge: ["#3a2a1a","#f0883e"],
+  dummy: ["#2a2a2a","#6e7681"],
+  mgmt: ["#1a2a3a","#58a6ff"],
+  docker: ["#3a1a2a","#ff7b72"],
+  other: ["#1e2d3d","#546e7a"],
+};
+function typeBadge(t) {
+  const [bg, fg] = TYPE_COLORS[t] || TYPE_COLORS.other;
+  return `<span style="background:${bg};color:${fg};border:1px solid ${fg}33;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">${(t||"?").toUpperCase()}</span>`;
+}
+
+function kernelBadge(state, flags) {
+  if (state === "—" || !state) return `<span class="badge badge-unk">—</span>`;
+  // UP = fully up, UNKNOWN = up but no link detection (normal in VS), DOWN = down
+  if (state === "UP") {
+    return `<span class="badge badge-up" title="${flags}">● UP</span>`;
+  } else if (state === "UNKNOWN") {
+    // UNKNOWN with LOWER_UP flag means carrier is present = functionally up
+    const hasCarrier = flags.includes("LOWER_UP");
+    return `<span class="badge" style="background:rgba(227,179,65,0.12);color:#e3b341;border:1px solid rgba(227,179,65,0.3)" title="${flags}">
+      ${hasCarrier ? "◉" : "○"} UNKNOWN${hasCarrier ? " (carrier)" : ""}
+    </span>`;
+  } else if (state === "DOWN") {
+    return `<span class="badge badge-down" title="${flags}">○ DOWN</span>`;
+  }
+  return `<span class="badge badge-unk" title="${flags}">${state}</span>`;
+}
+
+function badge(val) {
+  if (!val || val === "unknown" || val === "?") return `<span class="badge badge-unk">?</span>`;
+  const up = ["up","Established","established"].includes(val);
+  return `<span class="badge ${up ? 'badge-up' : 'badge-down'}">${up ? '●' : '○'} ${val}</span>`;
+}
+
+// ── Pub/Sub Live Feed ──
+let evtSource   = null;
+let feedPaused  = false;
+let eventCount  = 0;
+const MAX_ROWS  = 200;
+
+const DB_COLORS = {
+  APPL_DB:     ["#1a3a1a","#00ff9d"],
+  ASIC_DB:     ["#1a1a3a","#bc8cff"],
+  COUNTERS_DB: ["#3a2a1a","#f0883e"],
+  CONFIG_DB:   ["#1a2a3a","#00d4ff"],
+  STATE_DB:    ["#3a1a1a","#ff7b72"],
+};
+
+const OP_COLORS = {
+  hset: "#00d4ff",
+  hdel: "#ff7b72",
+  del:  "#ff4560",
+  set:  "#00ff9d",
+};
+
+function toggleSubscription() {
+  if (evtSource) {
+    stopFeed();
+  } else {
+    startFeed();
+  }
+}
+
+function startFeed() {
+  const dbs = [...document.querySelectorAll('.db-check input:checked')].map(el => el.value);
+  if (!dbs.length) { alert("Select at least one DB to watch"); return; }
+
+  const params = dbs.map(d => `db=${d}`).join("&");
+  evtSource = new EventSource(`/api/pubsub?${params}`);
+
+  document.getElementById("subBtn").textContent   = "⏹ Stop";
+  document.getElementById("subBtn").style.background = "var(--down)";
+  document.getElementById("feedPlaceholder").style.display = "none";
+
+  const dot = document.getElementById("pubsubDot");
+  dot.style.background = "var(--up)";
+  dot.style.animation  = "pulse-green 2s infinite";
+
+  evtSource.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === "connected") {
+      appendSystemRow(`Connected · watching DB: ${msg.dbs.join(", ")}`, "var(--up)");
+      return;
+    }
+    if (msg.type === "heartbeat") {
+      return; // silent heartbeat
+    }
+    if (msg.type === "error") {
+      appendSystemRow(`Error: ${msg.msg}`, "var(--down)");
+      return;
+    }
+    if (msg.type === "event" && !feedPaused) {
+      appendEventRow(msg);
+    }
+  };
+
+  evtSource.onerror = () => {
+    appendSystemRow("Connection lost — retrying...", "var(--warn)");
+    dot.style.background = "var(--warn)";
+  };
+}
+
+function stopFeed() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  document.getElementById("subBtn").textContent   = "▶ Start";
+  document.getElementById("subBtn").style.background = "";
+  const dot = document.getElementById("pubsubDot");
+  dot.style.background = "var(--muted)";
+  dot.style.animation  = "none";
+  appendSystemRow("Stopped.", "var(--muted)");
+}
+
+function togglePause() {
+  feedPaused = !feedPaused;
+  document.getElementById("pauseBtn").textContent = feedPaused ? "▶ Resume" : "⏸ Pause";
+  document.getElementById("pauseBtn").style.color = feedPaused ? "var(--warn)" : "";
+}
+
+function clearFeed() {
+  document.getElementById("feedRows").innerHTML =
+    `<div class="loading" id="feedPlaceholder" style="display:${evtSource ? "none" : "flex"}">
+      <div>Press <strong style="color:var(--accent)">▶ Start</strong> to begin watching Redis events</div>
+    </div>`;
+  eventCount = 0;
+  document.getElementById("eventCount").textContent = "0 events";
+}
+
+function appendEventRow(msg) {
+  eventCount++;
+  document.getElementById("eventCount").textContent = `${eventCount} events`;
+
+  const container = document.getElementById("feedRows");
+  const [dbBg, dbFg] = DB_COLORS[msg.db_name] || ["#1e2d3d","#546e7a"];
+  const opColor = OP_COLORS[msg.op] || "var(--muted)";
+
+  // Format value — show first 3 key:val pairs
+  const valStr = msg.value && typeof msg.value === "object"
+    ? Object.entries(msg.value).slice(0,3).map(([k,v]) => `${k}=${v}`).join("  ")
+    : (msg.value || "—");
+
+  const row = document.createElement("div");
+  row.className = "feed-row";
+  row.innerHTML = `
+    <div class="feed-cell" style="color:var(--muted)">${msg.ts}</div>
+    <div class="feed-cell">
+      <span style="background:${dbBg};color:${dbFg};border:1px solid ${dbFg}44;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700">${msg.db_name}</span>
+    </div>
+    <div class="feed-cell" style="color:${opColor};font-weight:600;text-transform:uppercase">${msg.op}</div>
+    <div class="feed-cell" style="color:var(--text)" title="${msg.key}">${msg.key}</div>
+    <div class="feed-cell" style="color:var(--muted)" title="${JSON.stringify(msg.value)}">${valStr}</div>
+  `;
+
+  // Prepend so newest is at top
+  container.insertBefore(row, container.firstChild);
+
+  // Limit rows
+  const rows = container.querySelectorAll(".feed-row");
+  if (rows.length > MAX_ROWS) rows[rows.length - 1].remove();
+}
+
+function appendSystemRow(msg, color) {
+  const container = document.getElementById("feedRows");
+  const row = document.createElement("div");
+  row.style.cssText = `padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:${color};border-bottom:1px solid rgba(30,45,61,0.4);animation:fadeIn 0.3s ease`;
+  row.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  container.insertBefore(row, container.firstChild);
+}
+
+// Stop feed when leaving panel
+const _origShowPanel = showPanel;
+window.showPanel = function(name) {
+  if (name !== "pubsub" && evtSource) stopFeed();
+  _origShowPanel(name);
+};
+
+// ── VLANs ──
+async function loadVlans() {
+  const el = document.getElementById("vlanContent");
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  document.getElementById("vlanStats").innerHTML = "";
+
+  try {
+    const r    = await fetch(API + "/api/vlans");
+    const data = await r.json();
+
+    if (data.error) {
+      el.innerHTML = `<div class="error-box">${data.error}</div>`;
+      return;
+    }
+    if (!data.length) {
+      el.innerHTML = '<div class="loading">No VLANs configured</div>';
+      return;
+    }
+
+    // Stats bar
+    const totalMembers = data.reduce((s, v) => s + v.member_count, 0);
+    const withIp       = data.filter(v => v.ips.length > 0).length;
+    document.getElementById("vlanStats").innerHTML = `
+      <div class="stat-card" style="flex:0 0 auto;min-width:130px">
+        <div class="stat-val">${data.length}</div>
+        <div class="stat-lbl">Total VLANs</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:130px">
+        <div class="stat-val" style="color:var(--accent)">${totalMembers}</div>
+        <div class="stat-lbl">Total Members</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:130px">
+        <div class="stat-val" style="color:var(--accent2)">${withIp}</div>
+        <div class="stat-lbl">L3 VLANs (with IP)</div>
+      </div>
+    `;
+
+    // VLAN cards
+    el.innerHTML = `<div class="vlan-grid">${data.map(v => vlanCard(v)).join("")}</div>`;
+
+  } catch(e) {
+    el.innerHTML = `<div class="error-box">Error: ${e}</div>`;
+  }
+}
+
+function vlanCard(v) {
+  const memberRows = v.members.length
+    ? `<div style="display:grid;grid-template-columns:1fr 80px 80px 80px;padding:6px 16px 4px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">
+        <div>Port</div><div>Mode</div><div>Oper</div><div>Speed</div>
+       </div>
+       ${v.members.map(m => `
+        <div class="vlan-member-row">
+          <div style="color:var(--text);font-weight:600">${m.port}</div>
+          <div>
+            <span class="tag-badge ${m.tagging_mode === 'tagged' ? 'tag-tagged' : 'tag-untagged'}">
+              ${m.tagging_mode}
+            </span>
+          </div>
+          <div>${badge(m.oper)}</div>
+          <div style="color:var(--muted)">${m.speed !== "—" ? m.speed + "M" : "—"}</div>
+        </div>`).join("")}`
+    : `<div class="vlan-no-members">No member ports</div>`;
+
+  const ipSection = v.ips.length
+    ? `<div class="vlan-ip">⬡ ${v.ips.join("  ·  ")}</div>`
+    : "";
+
+  const operColor = v.oper === "up" ? "var(--up)" : v.oper === "—" ? "var(--muted)" : "var(--down)";
+
+  return `
+    <div class="vlan-card">
+      <div class="vlan-card-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="vlan-id-badge">VLAN ${v.vlan_id}</div>
+            ${v.description ? `<span style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${v.description}</span>` : ""}
+          </div>
+          <div class="vlan-name">${v.name}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          ${badge(v.oper)}
+          <span style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${v.member_count} port${v.member_count !== 1 ? "s" : ""}</span>
+        </div>
+      </div>
+      ${v.mtu !== "—" ? `<div class="vlan-meta">
+        <div class="vlan-meta-item">MTU <span>${v.mtu}</span></div>
+      </div>` : ""}
+      ${ipSection}
+      <div class="vlan-members-title">Member Ports</div>
+      ${memberRows}
+    </div>`;
+}
+
+// ── Modify Actions ──
+function logAction(msg, type="ok") {
+  const log = document.getElementById("actionLog");
+  const ts  = new Date().toLocaleTimeString();
+  const cls = type === "ok" ? "log-ok" : type === "err" ? "log-err" : "log-info";
+  const el  = document.createElement("div");
+  el.innerHTML = `<span class="log-info">[${ts}]</span> <span class="${cls}">${msg}</span>`;
+  log.insertBefore(el, log.firstChild);
+}
+
+async function callAction(url, body) {
+  try {
+    const r = await fetch(url, {
+      method:  "POST",
+      headers: {"Content-Type": "application/json"},
+      body:    JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      logAction("OK  " + d.msg, "ok");
+    } else {
+      logAction("ERR " + d.error, "err");
+    }
+  } catch(e) {
+    logAction("ERR " + e, "err");
+  }
+}
+
+function ifaceAction(action) {
+  const name = document.getElementById("mod-iface-name").value.trim();
+  if (!name) { logAction("ERR  Enter interface name first", "err"); return; }
+  const body = { name, action };
+  if (action === "set_mtu")         body.mtu         = document.getElementById("mod-iface-mtu").value;
+  if (action === "set_description") body.description = document.getElementById("mod-iface-desc").value;
+  if (action === "add_ip" || action === "remove_ip") {
+    body.ip = document.getElementById("mod-iface-ip").value.trim();
+    if (!body.ip) { logAction("ERR  Enter IP address first", "err"); return; }
+  }
+  logAction(`→ ${action} on ${name} ...`, "info");
+  callAction("/api/action/interface", body);
+}
+
+function vlanAction(action) {
+  const vlan_id = document.getElementById("mod-vlan-id").value.trim();
+  if (!vlan_id) { logAction("ERR  Enter VLAN ID first", "err"); return; }
+  const body = { action, vlan_id };
+  if (action === "add_member" || action === "remove_member") {
+    body.member = document.getElementById("mod-vlan-member").value.trim();
+    body.mode   = document.getElementById("mod-vlan-mode").value;
+    if (!body.member) { logAction("ERR  Enter member port first", "err"); return; }
+  }
+  logAction(`→ ${action} VLAN ${vlan_id} ...`, "info");
+  callAction("/api/action/vlan", body);
+}
+
+function bgpAction(action) {
+  const peer = document.getElementById("mod-bgp-peer").value.trim();
+  if (!peer) { logAction("ERR  Enter peer IP first", "err"); return; }
+  const body = {
+    action,
+    peer,
+    asn:  document.getElementById("mod-bgp-asn").value.trim(),
+    name: document.getElementById("mod-bgp-name").value.trim(),
+  };
+  logAction(`→ ${action} BGP peer ${peer} ...`, "info");
+  callAction("/api/action/bgp", body);
+}
+
+function rawWrite() {
+  const key   = document.getElementById("mod-raw-key").value.trim();
+  const field = document.getElementById("mod-raw-field").value.trim();
+  const value = document.getElementById("mod-raw-value").value.trim();
+  const db    = document.getElementById("mod-raw-db").value;
+  if (!key) { logAction("ERR  Enter a key first", "err"); return; }
+  logAction(`→ Writing DB${db} ${key} ${field}=${value} ...`, "info");
+  callAction("/api/action/raw", { db, key, field, value });
+}
+
+// ── Init ──
+checkStatus();
+loadOverview();
+
+// auto-refresh status every 10s
+setInterval(checkStatus, 10000);
+</script>
+</body>
+</html>

@@ -1,7 +1,0 @@
-name: project_sonic
-
-topology:
-  nodes:
-    sonic1:
-      kind: sonic-vs
-      image: docker-sonic-vs:2020-11-12

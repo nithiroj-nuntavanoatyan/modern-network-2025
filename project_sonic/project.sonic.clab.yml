@@ -1,0 +1,15 @@
+name: project_sonic
+
+topology:
+  nodes:
+    sonic1:
+      kind: sonic-vs
+      image: docker-sonic-vs:latest
+      exec:
+        - ip link set eth0 up
+        - sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+        - sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        - echo 'root:sonic123' | chpasswd
+        - pkill sshd || true
+        - /usr/sbin/sshd
+        - redis-cli -s /run/redis/redis.sock config set bind "127.0.0.1"

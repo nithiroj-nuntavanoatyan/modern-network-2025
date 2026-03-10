@@ -1,0 +1,6 @@
+---
+sonic1:
+    username: 
+    password: 
+    platform: sonic-vs
+    hostname: 172.20.20.2
