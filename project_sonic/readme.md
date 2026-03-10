@@ -58,7 +58,8 @@ sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 # 2. Set root password
-echo 'root:sonic123' | chpasswd
+passwd root
+#set the password ex sonic123
 
 # 3. Restart SSH
 pkill sshd && /usr/sbin/sshd
