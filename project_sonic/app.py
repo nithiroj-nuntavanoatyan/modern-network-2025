@@ -25,10 +25,10 @@ CORS(app)
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SONIC_HOST        = "172.20.20.2"
+SONIC_HOST        = "192.168.1.12"
 SONIC_SSH_PORT    = 22
-SONIC_USER        = "root"
-SONIC_PASSWORD    = "sonic123"
+SONIC_USER        = "admin"
+SONIC_PASSWORD    = "YourPaSsWoRd"
 LOCAL_TUNNEL_PORT = 16379
 
 SONIC_DBS = {
