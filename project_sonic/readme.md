@@ -11,7 +11,6 @@ project_sonic/
 ├── app.py            ← Flask backend (SSH tunnel + REST API)
 ├── index.html        ← Web dashboard frontend
 ├── README.md         ← This file
-└── sonic_db_agent.py ← Optional CLI agent (runs on SONiC directly)
 ```
 
 ---
@@ -80,8 +79,6 @@ topology:
     sonic1:
       kind: sonic-vs
       image: docker-sonic-vs:latest
-      binds:
-        - sonic_db_agent.py:/tmp/sonic_db_agent.py:ro
       exec:
         - ip link set eth0 up
         - sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -266,5 +263,4 @@ Browser (http://localhost:5000)
 
 - `app.py` — Flask backend with SSH tunnel, REST API, pub/sub SSE stream, and write actions
 - `index.html` — Single-file web dashboard
-- `sonic_db_agent.py` — CLI agent for running directly on the SONiC box
 - `README.md` — This file
