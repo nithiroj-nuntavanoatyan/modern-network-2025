@@ -31,7 +31,7 @@ CORS(app)
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SONIC_HOST        = "192.168.4.5"
+SONIC_HOST        = "192.168.4.5" #Don't forget to change this to your SONiC device's IP address
 SONIC_SSH_PORT    = 22
 SONIC_USER        = "admin"
 SONIC_PASSWORD    = "YourPaSsWoRd"
