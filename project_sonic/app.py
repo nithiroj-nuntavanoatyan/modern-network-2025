@@ -18,6 +18,12 @@ import threading
 import time
 import os
 import subprocess
+import re
+
+def natural_sort_key(s):
+    """Sort Ethernet2 before Ethernet10 by splitting on digit boundaries."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split("([0-9]+)", s)]
+
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
@@ -25,7 +31,7 @@ CORS(app)
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SONIC_HOST        = "192.168.1.12"
+SONIC_HOST        = "192.168.4.5"
 SONIC_SSH_PORT    = 22
 SONIC_USER        = "admin"
 SONIC_PASSWORD    = "YourPaSsWoRd"
@@ -263,7 +269,7 @@ def api_interfaces():
                 iface_map[name] = "other"
 
         result = []
-        for iface in sorted(iface_map.keys()):
+        for iface in sorted(iface_map.keys(), key=natural_sort_key):
             itype     = iface_map[iface]
             cfg_data  = (cfg.hgetall(f"PORT|{iface}") or
                          cfg.hgetall(f"VLAN|{iface}") or
