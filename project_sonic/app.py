@@ -18,12 +18,8 @@ import threading
 import time
 import os
 import subprocess
-import re
-
-def natural_sort_key(s):
-    """Sort Ethernet2 before Ethernet10 by splitting on digit boundaries."""
-    return [int(c) if c.isdigit() else c.lower() for c in re.split("([0-9]+)", s)]
-
+import yaml
+import traceback
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
@@ -31,7 +27,7 @@ CORS(app)
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SONIC_HOST        = "192.168.4.5" #Don't forget to change this to your SONiC device's IP address
+SONIC_HOST        = "192.168.10.1"
 SONIC_SSH_PORT    = 22
 SONIC_USER        = "admin"
 SONIC_PASSWORD    = "YourPaSsWoRd"
@@ -269,7 +265,7 @@ def api_interfaces():
                 iface_map[name] = "other"
 
         result = []
-        for iface in sorted(iface_map.keys(), key=natural_sort_key):
+        for iface in sorted(iface_map.keys()):
             itype     = iface_map[iface]
             cfg_data  = (cfg.hgetall(f"PORT|{iface}") or
                          cfg.hgetall(f"VLAN|{iface}") or
@@ -775,6 +771,240 @@ def api_pubsub():
         },
     )
 
+
+
+# ─────────────────────────────────────────────
+# Script Runner  —  Ansible-style YAML playbook
+# ─────────────────────────────────────────────
+
+SCRIPT_TASKS = {
+    # ── Interface ──────────────────────────────────────────────
+    "interface_startup": {
+        "desc": "Bring interface admin up",
+        "required": ["name"],
+        "run": lambda r, p: r[4].hset(f"PORT|{p['name']}", "admin_status", "up")
+    },
+    "interface_shutdown": {
+        "desc": "Bring interface admin down",
+        "required": ["name"],
+        "run": lambda r, p: r[4].hset(f"PORT|{p['name']}", "admin_status", "down")
+    },
+    "interface_set_mtu": {
+        "desc": "Set interface MTU",
+        "required": ["name", "mtu"],
+        "run": lambda r, p: r[4].hset(f"PORT|{p['name']}", "mtu", str(p["mtu"]))
+    },
+    "interface_set_description": {
+        "desc": "Set interface description",
+        "required": ["name", "description"],
+        "run": lambda r, p: r[4].hset(f"PORT|{p['name']}", "description", p["description"])
+    },
+    "interface_set_speed": {
+        "desc": "Set interface speed",
+        "required": ["name", "speed"],
+        "run": lambda r, p: r[4].hset(f"PORT|{p['name']}", "speed", str(p["speed"]))
+    },
+    "ip_add": {
+        "desc": "Add IP address to interface",
+        "required": ["name", "ip"],
+        "run": lambda r, p: [
+            r[4].hset(f"INTERFACE|{p['name']}|{p['ip']}", "scope", "global"),
+            r[4].hset(f"INTERFACE|{p['name']}", "NULL", "NULL"),
+        ]
+    },
+    "ip_remove": {
+        "desc": "Remove IP address from interface",
+        "required": ["name", "ip"],
+        "run": lambda r, p: r[4].delete(f"INTERFACE|{p['name']}|{p['ip']}")
+    },
+
+    # ── VLAN ───────────────────────────────────────────────────
+    "vlan_add": {
+        "desc": "Create a VLAN",
+        "required": ["vlan_id"],
+        "run": lambda r, p: r[4].hset(f"VLAN|Vlan{p['vlan_id']}", "vlanid", str(p["vlan_id"]))
+    },
+    "vlan_remove": {
+        "desc": "Delete a VLAN",
+        "required": ["vlan_id"],
+        "run": lambda r, p: r[4].delete(f"VLAN|Vlan{p['vlan_id']}")
+    },
+    "vlan_member_add": {
+        "desc": "Add port to VLAN",
+        "required": ["vlan_id", "port"],
+        "run": lambda r, p: r[4].hset(
+            f"VLAN_MEMBER|Vlan{p['vlan_id']}|{p['port']}",
+            "tagging_mode", p.get("tagging_mode", "untagged")
+        )
+    },
+    "vlan_member_remove": {
+        "desc": "Remove port from VLAN",
+        "required": ["vlan_id", "port"],
+        "run": lambda r, p: r[4].delete(f"VLAN_MEMBER|Vlan{p['vlan_id']}|{p['port']}")
+    },
+    "vlan_ip_add": {
+        "desc": "Add IP to VLAN SVI",
+        "required": ["vlan_id", "ip"],
+        "run": lambda r, p: [
+            r[4].hset(f"VLAN_INTERFACE|Vlan{p['vlan_id']}|{p['ip']}", "scope", "global"),
+            r[4].hset(f"VLAN_INTERFACE|Vlan{p['vlan_id']}", "NULL", "NULL"),
+        ]
+    },
+
+    # ── BGP ────────────────────────────────────────────────────
+    "bgp_neighbor_add": {
+        "desc": "Add BGP neighbor",
+        "required": ["peer", "asn"],
+        "run": lambda r, p: r[4].hset(f"BGP_NEIGHBOR|{p['peer']}", mapping={
+            "asn": str(p["asn"]),
+            "name": p.get("name", ""),
+            "admin_status": "up",
+        })
+    },
+    "bgp_neighbor_remove": {
+        "desc": "Remove BGP neighbor",
+        "required": ["peer"],
+        "run": lambda r, p: r[4].delete(f"BGP_NEIGHBOR|{p['peer']}")
+    },
+    "bgp_startup": {
+        "desc": "Start BGP neighbor session",
+        "required": ["peer"],
+        "run": lambda r, p: r[4].hset(f"BGP_NEIGHBOR|{p['peer']}", "admin_status", "up")
+    },
+    "bgp_shutdown": {
+        "desc": "Shutdown BGP neighbor session",
+        "required": ["peer"],
+        "run": lambda r, p: r[4].hset(f"BGP_NEIGHBOR|{p['peer']}", "admin_status", "down")
+    },
+
+    # ── Device ─────────────────────────────────────────────────
+    "set_hostname": {
+        "desc": "Set device hostname",
+        "required": ["hostname"],
+        "run": lambda r, p: r[4].hset("DEVICE_METADATA|localhost", "hostname", p["hostname"])
+    },
+
+    # ── Raw ────────────────────────────────────────────────────
+    "raw_hset": {
+        "desc": "Set a hash field in any DB",
+        "required": ["db", "key", "field", "value"],
+        "run": lambda r, p: r[int(p["db"])].hset(p["key"], p["field"], str(p["value"]))
+    },
+    "raw_delete": {
+        "desc": "Delete a key from any DB",
+        "required": ["db", "key"],
+        "run": lambda r, p: r[int(p["db"])].delete(p["key"])
+    },
+}
+
+
+@app.route("/api/script/tasks")
+def api_script_tasks():
+    """Return available task types and their descriptions."""
+    return jsonify({
+        name: {"desc": t["desc"], "required": t["required"]}
+        for name, t in SCRIPT_TASKS.items()
+    })
+
+
+@app.route("/api/script/run", methods=["POST"])
+def api_script_run():
+    """
+    Execute a YAML playbook against SONiC Redis.
+
+    Playbook format:
+    ---
+    name: My playbook
+    tasks:
+      - name: Bring up Ethernet1
+        task: interface_startup
+        name: Ethernet1
+
+      - name: Add IP
+        task: ip_add
+        name: Ethernet1
+        ip: 10.0.0.1/24
+    """
+    data = request.json or {}
+    raw  = data.get("script", "")
+
+    results = []
+    start_time = time.time()
+
+    try:
+        playbook = yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        return jsonify({"ok": False, "error": f"YAML parse error: {e}", "results": []})
+
+    if not isinstance(playbook, dict):
+        return jsonify({"ok": False, "error": "Playbook must be a YAML object with a 'tasks' key", "results": []})
+
+    tasks = playbook.get("tasks", [])
+    if not isinstance(tasks, list):
+        return jsonify({"ok": False, "error": "'tasks' must be a list", "results": []})
+
+    # Build a dict of redis connections keyed by DB id
+    redis_dbs = {i: get_redis(i) for i in range(9)}
+
+    overall_ok = True
+    for i, task in enumerate(tasks):
+        task_name  = task.get("name", f"Task {i+1}")
+        task_type  = task.get("task", "")
+        t_start    = time.time()
+
+        if not task_type:
+            results.append({"name": task_name, "task": "", "status": "error", "msg": "Missing 'task' field", "duration": 0})
+            overall_ok = False
+            continue
+
+        if task_type not in SCRIPT_TASKS:
+            results.append({"name": task_name, "task": task_type, "status": "error", "msg": f"Unknown task type: '{task_type}'. Use /api/script/tasks to see available tasks.", "duration": 0})
+            overall_ok = False
+            continue
+
+        definition = SCRIPT_TASKS[task_type]
+
+        # Check required params
+        missing = [r for r in definition["required"] if r not in task]
+        if missing:
+            results.append({"name": task_name, "task": task_type, "status": "error", "msg": f"Missing required params: {missing}", "duration": 0})
+            overall_ok = False
+            continue
+
+        # Execute
+        try:
+            definition["run"](redis_dbs, task)
+            duration = round((time.time() - t_start) * 1000, 1)
+            results.append({
+                "name":     task_name,
+                "task":     task_type,
+                "status":   "ok",
+                "msg":      definition["desc"],
+                "duration": duration,
+            })
+        except Exception as e:
+            duration = round((time.time() - t_start) * 1000, 1)
+            results.append({
+                "name":     task_name,
+                "task":     task_type,
+                "status":   "error",
+                "msg":      str(e),
+                "duration": duration,
+            })
+            overall_ok = False
+
+    total = round((time.time() - start_time) * 1000, 1)
+    ok_count   = sum(1 for r in results if r["status"] == "ok")
+    err_count  = sum(1 for r in results if r["status"] == "error")
+
+    return jsonify({
+        "ok":        overall_ok,
+        "total":     len(results),
+        "ok_count":  ok_count,
+        "err_count": err_count,
+        "duration":  total,
+        "results":   results,
+    })
 
 # ─────────────────────────────────────────────
 # Start
