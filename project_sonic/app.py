@@ -27,7 +27,7 @@ CORS(app)
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SONIC_HOST        = "192.168.10.1"
+SONIC_HOST        = "192.168.4.5"
 SONIC_SSH_PORT    = 22
 SONIC_USER        = "admin"
 SONIC_PASSWORD    = "YourPaSsWoRd"
@@ -771,6 +771,198 @@ def api_pubsub():
         },
     )
 
+
+
+# ─────────────────────────────────────────────
+# Pub/Sub  —  Publish to any channel
+# ─────────────────────────────────────────────
+
+@app.route("/api/pubsub/publish", methods=["POST"])
+def api_pubsub_publish():
+    """
+    Publish a message to any Redis channel (topic).
+
+    Body (JSON):
+        channel  : str   — channel/topic name (e.g. "my-topic", "alerts")
+        message  : any   — payload (string, dict, list, etc.)
+        db       : int   — Redis DB id to publish on (default: 0)
+
+    Example:
+        POST /api/pubsub/publish
+        {"channel": "my-topic", "message": {"hello": "world"}}
+    """
+    try:
+        data    = request.json or {}
+        channel = data.get("channel", "")
+        message = data.get("message", "")
+        db_id   = int(data.get("db", 0))
+
+        if not channel:
+            return jsonify({"ok": False, "error": "Missing 'channel'"}), 400
+
+        # Serialize message to JSON string if not already a string
+        if not isinstance(message, str):
+            message = json.dumps(message)
+
+        r         = get_redis(db_id)
+        receivers = r.publish(channel, message)
+
+        return jsonify({
+            "ok":        True,
+            "channel":   channel,
+            "message":   message,
+            "db":        db_id,
+            "receivers": receivers,   # number of subscribers that received the message
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ─────────────────────────────────────────────
+# Pub/Sub  —  Subscribe to custom channels (SSE)
+# ─────────────────────────────────────────────
+
+@app.route("/api/pubsub/subscribe")
+def api_pubsub_subscribe():
+    """
+    Subscribe to one or more Redis channels (custom topics) via Server-Sent Events.
+
+    Query params:
+        channel : str  (repeatable) — channel name(s) to subscribe to
+        pattern : str  (repeatable) — glob-pattern(s) to psubscribe to
+        db      : int               — Redis DB id (default: 0)
+
+    Example:
+        GET /api/pubsub/subscribe?channel=my-topic&channel=alerts
+        GET /api/pubsub/subscribe?pattern=sensor.*&pattern=alert.*
+
+    Each SSE event payload (JSON):
+        {
+          "type":    "message" | "pmessage" | "connected" | "heartbeat",
+          "channel": "<channel name>",
+          "pattern": "<pattern>" (only for pmessage),
+          "message": <parsed JSON or raw string>,
+          "ts":      "HH:MM:SS"
+        }
+    """
+    channels = request.args.getlist("channel")
+    patterns = request.args.getlist("pattern")
+    db_id    = int(request.args.get("db", 0))
+
+    if not channels and not patterns:
+        return jsonify({"ok": False, "error": "Provide at least one 'channel' or 'pattern' query param"}), 400
+
+    def sse(data):
+        return "data: " + json.dumps(data) + "\n\n"
+
+    def event_stream():
+        try:
+            r      = get_redis(db_id)
+            pubsub = r.pubsub()
+
+            if channels:
+                pubsub.subscribe(*channels)
+            if patterns:
+                pubsub.psubscribe(*patterns)
+
+            yield sse({
+                "type":     "connected",
+                "channels": channels,
+                "patterns": patterns,
+                "db":       db_id,
+                "msg":      "Subscribed successfully",
+            })
+
+            idle = 0
+            while True:
+                msg = pubsub.get_message(timeout=1.0)
+                if msg is None:
+                    idle += 1
+                    if idle >= 15:
+                        yield sse({"type": "heartbeat"})
+                        idle = 0
+                    continue
+
+                idle = 0
+                if msg["type"] not in ("message", "pmessage"):
+                    continue
+
+                raw = msg.get("data", "")
+                # Try to parse as JSON for nicer output
+                try:
+                    parsed = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    parsed = raw
+
+                event = {
+                    "type":    msg["type"],
+                    "channel": msg.get("channel", ""),
+                    "message": parsed,
+                    "ts":      time.strftime("%H:%M:%S"),
+                }
+                if msg["type"] == "pmessage":
+                    event["pattern"] = msg.get("pattern", "")
+
+                yield sse(event)
+
+        except GeneratorExit:
+            try:
+                pubsub.unsubscribe()
+                pubsub.punsubscribe()
+                pubsub.close()
+            except Exception:
+                pass
+        except Exception as e:
+            yield sse({"type": "error", "msg": str(e)})
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection":        "keep-alive",
+        },
+    )
+
+
+# ─────────────────────────────────────────────
+# Pub/Sub  —  List active channels
+# ─────────────────────────────────────────────
+
+@app.route("/api/pubsub/channels")
+def api_pubsub_channels():
+    """
+    List all active pub/sub channels (channels that have at least 1 subscriber).
+
+    Query params:
+        pattern : str — glob pattern to filter (default: *)
+        db      : int — Redis DB id (default: 0)
+    """
+    try:
+        pattern = request.args.get("pattern", "*")
+        db_id   = int(request.args.get("db", 0))
+        r       = get_redis(db_id)
+
+        channels     = r.pubsub_channels(pattern=pattern)
+        numsub_raw   = r.pubsub_numsub(*channels) if channels else []
+        numpat       = r.pubsub_numpat()
+
+        # pubsub_numsub returns [(channel, count), ...]
+        numsub = {ch: cnt for ch, cnt in numsub_raw}
+
+        return jsonify({
+            "ok":       True,
+            "db":       db_id,
+            "pattern":  pattern,
+            "channels": [
+                {"channel": ch, "subscribers": numsub.get(ch, 0)}
+                for ch in channels
+            ],
+            "num_patterns": numpat,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ─────────────────────────────────────────────

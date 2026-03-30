@@ -964,6 +964,10 @@ tbody tr:hover { background: rgba(0,212,255,0.03); }
         <span class="nav-icon">◎</span> Live Feed
         <span id="pubsubDot" style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--muted)"></span>
       </div>
+      <div class="nav-item" onclick="showPanel('pubsub-config')" id="nav-pubsub-config">
+        <span class="nav-icon">⇅</span> Pub/Sub Config
+        <span id="pscDot" style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--muted)"></span>
+      </div>
       <div class="nav-item" onclick="showPanel('modify')" id="nav-modify">
         <span class="nav-icon">✎</span> Modify
       </div>
@@ -1309,6 +1313,147 @@ tasks:
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- PUB/SUB CONFIG PANEL -->
+  <div class="panel" id="panel-pubsub-config">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div>
+        <div class="panel-title">Pub/Sub Config</div>
+        <div class="panel-sub">Subscribe to custom Redis channels · Publish messages to any topic</div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--border)">
+      <button id="pscTab-sub" onclick="pscSwitchTab('sub')"
+        style="background:none;border:none;border-bottom:2px solid var(--accent);color:var(--accent);padding:8px 20px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;letter-spacing:1px;transition:all 0.15s">
+        ◎ SUBSCRIBE
+      </button>
+      <button id="pscTab-pub" onclick="pscSwitchTab('pub')"
+        style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 20px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;letter-spacing:1px;transition:all 0.15s">
+        ↑ PUBLISH
+      </button>
+    </div>
+
+    <!-- SUBSCRIBE TAB -->
+    <div id="pscPane-sub">
+      <div style="display:grid;grid-template-columns:340px 1fr;gap:16px;height:calc(100vh - 260px)">
+
+        <!-- Left: channel config -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+
+          <!-- DB selector -->
+          <div class="mod-section">
+            <div class="mod-section-header"><span class="mod-section-icon">◈</span> Redis DB</div>
+            <div class="mod-body" style="grid-template-columns:1fr">
+              <div class="mod-field">
+                <label>DB</label>
+                <select id="psc-sub-db">
+                  <option value="0">APPL_DB (0)</option>
+                  <option value="1">ASIC_DB (1)</option>
+                  <option value="2">COUNTERS_DB (2)</option>
+                  <option value="3">LOGLEVEL_DB (3)</option>
+                  <option value="4">CONFIG_DB (4)</option>
+                  <option value="5">PFC_WD_DB (5)</option>
+                  <option value="6">STATE_DB (6)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Channels -->
+          <div class="mod-section" style="flex:1;display:flex;flex-direction:column;min-height:0">
+            <div class="mod-section-header"><span class="mod-section-icon">⇅</span> Channels / Patterns</div>
+            <div style="padding:12px 14px;display:flex;gap:8px">
+              <input type="text" id="psc-ch-input" placeholder="channel name or glob pattern*"
+                style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none"
+                onkeydown="if(event.key==='Enter') pscAddChannel()">
+              <button class="btn-action" onclick="pscAddChannel()" style="white-space:nowrap">+ Add</button>
+            </div>
+            <div id="psc-ch-list" style="flex:1;overflow-y:auto;padding:0 14px 12px;display:flex;flex-direction:column;gap:6px;min-height:0">
+              <div style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:8px 0">No channels added yet</div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div style="display:flex;gap:8px">
+            <button class="btn-action success" id="psc-start-btn" onclick="pscStartSubscribe()" style="flex:1">▶ Connect</button>
+            <button class="btn-action danger"  id="psc-stop-btn"  onclick="pscStopSubscribe()"  style="flex:1" disabled>⏹ Disconnect</button>
+            <button class="refresh-btn" onclick="pscClearMessages()">✕ Clear</button>
+          </div>
+        </div>
+
+        <!-- Right: message log -->
+        <div style="display:flex;flex-direction:column;gap:0">
+          <!-- Header row -->
+          <div style="display:grid;grid-template-columns:75px 1fr 1fr;background:var(--surface);border:1px solid var(--border);border-radius:10px 10px 0 0;border-bottom:none">
+            <div style="padding:9px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Time</div>
+            <div style="padding:9px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Channel</div>
+            <div style="padding:9px 14px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace">Message</div>
+          </div>
+          <!-- Message rows -->
+          <div id="psc-msg-list" style="flex:1;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;min-height:0">
+            <div id="psc-msg-placeholder" style="display:flex;align-items:center;justify-content:center;padding:48px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px">
+              Press <strong style="color:var(--accent);margin:0 6px">▶ Connect</strong> to start receiving messages
+            </div>
+          </div>
+          <!-- Footer: count -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">
+            <span id="psc-msg-count">0 messages</span>
+            <span id="psc-status-label" style="color:var(--muted)">● Idle</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PUBLISH TAB -->
+    <div id="pscPane-pub" style="display:none">
+      <div style="max-width:700px">
+
+        <div class="mod-section">
+          <div class="mod-section-header"><span class="mod-section-icon">↑</span> Publish Message</div>
+          <div class="mod-body" style="grid-template-columns:1fr 1fr">
+            <div class="mod-field">
+              <label>Redis DB</label>
+              <select id="psc-pub-db">
+                <option value="0">APPL_DB (0)</option>
+                <option value="1">ASIC_DB (1)</option>
+                <option value="2">COUNTERS_DB (2)</option>
+                <option value="3">LOGLEVEL_DB (3)</option>
+                <option value="4">CONFIG_DB (4)</option>
+                <option value="5">PFC_WD_DB (5)</option>
+                <option value="6">STATE_DB (6)</option>
+              </select>
+            </div>
+            <div class="mod-field">
+              <label>Channel / Topic</label>
+              <input type="text" id="psc-pub-channel" placeholder="e.g. alerts, my-topic">
+            </div>
+          </div>
+          <div style="padding:0 18px 14px">
+            <div class="mod-field">
+              <label>Message Payload (JSON or plain text)</label>
+              <textarea id="psc-pub-message" rows="5" placeholder='{"hello": "world"}'
+                style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;resize:vertical;line-height:1.6;transition:border-color 0.2s"></textarea>
+            </div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn-action success" onclick="pscPublish()">↑ Publish</button>
+            <button class="btn-action" onclick="pscFillExample('plain')">Example: plain</button>
+            <button class="btn-action" onclick="pscFillExample('json')">Example: JSON</button>
+            <button class="btn-action" onclick="pscFillExample('alert')">Example: alert</button>
+          </div>
+        </div>
+
+        <!-- Publish log -->
+        <div style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Publish Log</div>
+        <div id="psc-pub-log" class="action-log">
+          <span class="log-info">// Publish results will appear here</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   </main>
@@ -2264,6 +2409,227 @@ function rawWrite() {
   logAction(`→ Writing DB${db} ${key} ${field}=${value} ...`, "info");
   callAction("/api/action/raw", { db, key, field, value });
 }
+
+// ── Pub/Sub Config panel ──
+let pscEvtSource  = null;
+let pscChannels   = [];  // [{type:'channel'|'pattern', value:string}]
+let pscMsgCount   = 0;
+const PSC_MAX_MSG = 300;
+
+function pscSwitchTab(tab) {
+  document.getElementById('pscPane-sub').style.display = tab === 'sub' ? '' : 'none';
+  document.getElementById('pscPane-pub').style.display = tab === 'pub' ? '' : 'none';
+  const subBtn = document.getElementById('pscTab-sub');
+  const pubBtn = document.getElementById('pscTab-pub');
+  subBtn.style.borderBottomColor = tab === 'sub' ? 'var(--accent)' : 'transparent';
+  subBtn.style.color             = tab === 'sub' ? 'var(--accent)' : 'var(--muted)';
+  pubBtn.style.borderBottomColor = tab === 'pub' ? 'var(--accent)' : 'transparent';
+  pubBtn.style.color             = tab === 'pub' ? 'var(--accent)' : 'var(--muted)';
+}
+
+function pscAddChannel() {
+  const val = document.getElementById('psc-ch-input').value.trim();
+  if (!val) return;
+  document.getElementById('psc-ch-input').value = '';
+  const isPattern = val.includes('*') || val.includes('?') || val.includes('[');
+  const type = isPattern ? 'pattern' : 'channel';
+  if (pscChannels.find(c => c.value === val)) return; // dedup
+  pscChannels.push({ type, value: val });
+  pscRenderChannels();
+}
+
+function pscRemoveChannel(val) {
+  pscChannels = pscChannels.filter(c => c.value !== val);
+  pscRenderChannels();
+}
+
+function pscRenderChannels() {
+  const el = document.getElementById('psc-ch-list');
+  if (!pscChannels.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:8px 0">No channels added yet</div>`;
+    return;
+  }
+  el.innerHTML = pscChannels.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+      <div style="display:flex;align-items:center;gap:8px;overflow:hidden">
+        <span style="font-size:10px;padding:1px 7px;border-radius:3px;font-weight:700;${
+          c.type === 'pattern'
+            ? 'background:rgba(188,140,255,0.15);color:#bc8cff;border:1px solid rgba(188,140,255,0.3)'
+            : 'background:rgba(0,212,255,0.12);color:var(--accent);border:1px solid rgba(0,212,255,0.25)'
+        }">${c.type.toUpperCase()}</span>
+        <span style="color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.value}">${c.value}</span>
+      </div>
+      <button onclick="pscRemoveChannel('${c.value.replace(/'/g,"\\'")}')"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px;transition:color 0.15s"
+        onmouseover="this.style.color='var(--down)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>`).join('');
+}
+
+function pscStartSubscribe() {
+  if (pscEvtSource) return;
+  if (!pscChannels.length) {
+    alert('Add at least one channel or pattern first');
+    return;
+  }
+  const db     = document.getElementById('psc-sub-db').value;
+  const params = new URLSearchParams();
+  params.set('db', db);
+  pscChannels.forEach(c => params.append(c.type === 'pattern' ? 'pattern' : 'channel', c.value));
+
+  pscEvtSource = new EventSource(`/api/pubsub/subscribe?${params.toString()}`);
+
+  document.getElementById('psc-start-btn').disabled = true;
+  document.getElementById('psc-stop-btn').disabled  = false;
+  document.getElementById('psc-msg-placeholder').style.display = 'none';
+  pscSetStatus('● Connecting…', 'var(--warn)');
+
+  const dot = document.getElementById('pscDot');
+  dot.style.background = 'var(--warn)';
+
+  pscEvtSource.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'connected') {
+      pscSetStatus('● Connected', 'var(--up)');
+      dot.style.background = 'var(--up)';
+      dot.style.animation  = 'pulse-green 2s infinite';
+      pscAppendSysRow(`Subscribed to DB${db}: ${pscChannels.map(c=>c.value).join(', ')}`, 'var(--up)');
+    } else if (msg.type === 'heartbeat') {
+      // silent
+    } else if (msg.type === 'error') {
+      pscAppendSysRow(`Error: ${msg.msg}`, 'var(--down)');
+    } else if (msg.type === 'message' || msg.type === 'pmessage') {
+      pscAppendMsg(msg);
+    }
+  };
+
+  pscEvtSource.onerror = () => {
+    pscSetStatus('● Reconnecting…', 'var(--warn)');
+    dot.style.background = 'var(--warn)';
+    dot.style.animation  = 'none';
+  };
+}
+
+function pscStopSubscribe() {
+  if (pscEvtSource) { pscEvtSource.close(); pscEvtSource = null; }
+  document.getElementById('psc-start-btn').disabled = false;
+  document.getElementById('psc-stop-btn').disabled  = true;
+  const dot = document.getElementById('pscDot');
+  dot.style.background = 'var(--muted)';
+  dot.style.animation  = 'none';
+  pscSetStatus('● Idle', 'var(--muted)');
+  pscAppendSysRow('Disconnected.', 'var(--muted)');
+}
+
+function pscSetStatus(text, color) {
+  const el = document.getElementById('psc-status-label');
+  el.textContent = text;
+  el.style.color = color;
+}
+
+function pscAppendMsg(msg) {
+  pscMsgCount++;
+  document.getElementById('psc-msg-count').textContent = `${pscMsgCount} messages`;
+  const container = document.getElementById('psc-msg-list');
+  const ts = msg.ts || new Date().toLocaleTimeString();
+  const payload = typeof msg.message === 'object'
+    ? JSON.stringify(msg.message, null, 0)
+    : String(msg.message ?? '');
+  const isPattern = msg.type === 'pmessage';
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:75px 1fr 1fr;border-bottom:1px solid rgba(30,45,61,0.4);animation:fadeIn 0.25s ease;transition:background 0.15s';
+  row.onmouseover = () => row.style.background = 'rgba(0,212,255,0.03)';
+  row.onmouseout  = () => row.style.background = '';
+  row.innerHTML = `
+    <div style="padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);align-self:center">${ts}</div>
+    <div style="padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;align-self:center;overflow:hidden">
+      ${isPattern ? `<div style="font-size:9px;color:#bc8cff;letter-spacing:1px;margin-bottom:2px">PATTERN: ${msg.pattern||''}</div>` : ''}
+      <span style="color:var(--accent);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block" title="${msg.channel}">${msg.channel}</span>
+    </div>
+    <div style="padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent2);align-self:center;word-break:break-all" title="${payload.replace(/"/g,'&quot;')}">${payload.length > 120 ? payload.slice(0,120)+'…' : payload}</div>
+  `;
+  container.insertBefore(row, container.firstChild);
+  // Limit rows
+  const rows = container.querySelectorAll('[style*="grid-template-columns"]');
+  if (rows.length > PSC_MAX_MSG) rows[rows.length - 1].remove();
+}
+
+function pscAppendSysRow(text, color) {
+  const container = document.getElementById('psc-msg-list');
+  const row = document.createElement('div');
+  row.style.cssText = `padding:7px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:${color};border-bottom:1px solid rgba(30,45,61,0.4);animation:fadeIn 0.25s ease`;
+  row.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+  container.insertBefore(row, container.firstChild);
+}
+
+function pscClearMessages() {
+  pscMsgCount = 0;
+  document.getElementById('psc-msg-count').textContent = '0 messages';
+  document.getElementById('psc-msg-list').innerHTML = `
+    <div id="psc-msg-placeholder" style="display:${pscEvtSource ? 'none' : 'flex'};align-items:center;justify-content:center;padding:48px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px">
+      Press <strong style="color:var(--accent);margin:0 6px">▶ Connect</strong> to start receiving messages
+    </div>`;
+}
+
+async function pscPublish() {
+  const channel = document.getElementById('psc-pub-channel').value.trim();
+  const msgRaw  = document.getElementById('psc-pub-message').value.trim();
+  const db      = document.getElementById('psc-pub-db').value;
+
+  if (!channel) { pscPubLog('ERR  Enter a channel name', 'err'); return; }
+  if (!msgRaw)  { pscPubLog('ERR  Enter a message payload', 'err'); return; }
+
+  let message = msgRaw;
+  try { message = JSON.parse(msgRaw); } catch(_) { /* keep as string */ }
+
+  pscPubLog(`→ Publishing to "${channel}" on DB${db}…`, 'info');
+  try {
+    const r = await fetch('/api/pubsub/publish', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ channel, message, db: parseInt(db) }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      pscPubLog(`OK  channel="${d.channel}" receivers=${d.receivers}`, 'ok');
+    } else {
+      pscPubLog(`ERR  ${d.error}`, 'err');
+    }
+  } catch(e) {
+    pscPubLog(`ERR  ${e}`, 'err');
+  }
+}
+
+function pscPubLog(msg, type='info') {
+  const log = document.getElementById('psc-pub-log');
+  const ts  = new Date().toLocaleTimeString();
+  const cls = type === 'ok' ? 'log-ok' : type === 'err' ? 'log-err' : 'log-info';
+  const el  = document.createElement('div');
+  el.innerHTML = `<span class="log-info">[${ts}]</span> <span class="${cls}">${msg}</span>`;
+  log.insertBefore(el, log.firstChild);
+}
+
+function pscFillExample(type) {
+  const ch  = document.getElementById('psc-pub-channel');
+  const msg = document.getElementById('psc-pub-message');
+  if (type === 'plain') {
+    ch.value  = 'my-topic';
+    msg.value = 'Hello from SONiC Dashboard';
+  } else if (type === 'json') {
+    ch.value  = 'alerts';
+    msg.value = JSON.stringify({ level: 'info', source: 'dashboard', text: 'Test message' }, null, 2);
+  } else if (type === 'alert') {
+    ch.value  = 'sonic.alerts';
+    msg.value = JSON.stringify({ severity: 'warning', device: 'switch-01', iface: 'Ethernet0', msg: 'Link down detected' }, null, 2);
+  }
+}
+
+// Stop psc subscribe when leaving panel
+const _origShowPanel2 = window.showPanel;
+window.showPanel = function(name) {
+  if (name !== 'pubsub-config' && pscEvtSource) pscStopSubscribe();
+  _origShowPanel2(name);
+};
 
 // ── Init ──
 checkStatus();
