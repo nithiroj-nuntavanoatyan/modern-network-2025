@@ -1334,6 +1334,10 @@ tasks:
         style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 20px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;letter-spacing:1px;transition:all 0.15s">
         ↑ PUBLISH
       </button>
+      <button id="pscTab-list" onclick="pscSwitchTab('list')"
+        style="background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:8px 20px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;letter-spacing:1px;transition:all 0.15s">
+        ≡ LIST CHANNELS
+      </button>
     </div>
 
     <!-- SUBSCRIBE TAB -->
@@ -1451,6 +1455,78 @@ tasks:
         <div id="psc-pub-log" class="action-log">
           <span class="log-info">// Publish results will appear here</span>
         </div>
+      </div>
+    </div>
+
+    <!-- LIST CHANNELS TAB -->
+    <div id="pscPane-list" style="display:none">
+      <div style="max-width:860px">
+
+        <!-- Controls row -->
+        <div class="mod-section">
+          <div class="mod-section-header"><span class="mod-section-icon">≡</span> List Active Channels</div>
+          <div class="mod-body" style="grid-template-columns:1fr 1fr auto">
+            <div class="mod-field">
+              <label>Redis DB</label>
+              <select id="psc-list-db">
+                <option value="0">APPL_DB (0)</option>
+                <option value="1">ASIC_DB (1)</option>
+                <option value="2">COUNTERS_DB (2)</option>
+                <option value="3">LOGLEVEL_DB (3)</option>
+                <option value="4">CONFIG_DB (4)</option>
+                <option value="5">PFC_WD_DB (5)</option>
+                <option value="6">STATE_DB (6)</option>
+                <option value="7">SNMP_OVERLAY_DB (7)</option>
+                <option value="8">ERROR_DB (8)</option>
+              </select>
+            </div>
+            <div class="mod-field">
+              <label>Filter Pattern</label>
+              <input type="text" id="psc-list-pattern" value="*" placeholder="glob pattern, e.g. alerts*">
+            </div>
+            <div class="mod-field" style="justify-content:flex-end">
+              <label>&nbsp;</label>
+              <div style="display:flex;gap:8px">
+                <button class="btn-action success" onclick="pscListChannels()">⟳ Fetch</button>
+                <button class="btn-action" id="psc-list-autorefresh-btn" onclick="pscToggleAutoRefresh()"
+                  style="white-space:nowrap">▶ Auto-refresh</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary bar -->
+        <div style="display:flex;align-items:center;gap:20px;padding:0 2px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">
+          <span>Channels with ≥1 subscriber shown · <span style="color:var(--accent2)" id="psc-list-summary">—</span></span>
+          <span style="margin-left:auto" id="psc-list-ts"></span>
+        </div>
+
+        <!-- Per-DB accordion: scan ALL DBs -->
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <button class="btn-action" onclick="pscListAllDbs()" style="font-size:11px">≡ Scan All DBs</button>
+          <span style="font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;align-self:center">
+            — or select a single DB above and press Fetch
+          </span>
+        </div>
+
+        <!-- Results table -->
+        <div class="table-wrap">
+          <div class="table-header">
+            <span class="table-title" id="psc-list-table-title">Channels</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)" id="psc-list-pat-label"></span>
+          </div>
+          <div id="psc-list-body">
+            <div style="display:flex;align-items:center;justify-content:center;padding:48px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px">
+              Press <strong style="color:var(--accent);margin:0 6px">⟳ Fetch</strong> or <strong style="color:var(--accent2);margin:0 6px">≡ Scan All DBs</strong> to list channels
+            </div>
+          </div>
+        </div>
+
+        <!-- num_patterns info -->
+        <div id="psc-list-patterns-info" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-top:8px;display:none">
+          Active pattern subscriptions: <span id="psc-list-numpat" style="color:var(--accent)">0</span>
+        </div>
+
       </div>
     </div>
 
@@ -2417,14 +2493,15 @@ let pscMsgCount   = 0;
 const PSC_MAX_MSG = 300;
 
 function pscSwitchTab(tab) {
-  document.getElementById('pscPane-sub').style.display = tab === 'sub' ? '' : 'none';
-  document.getElementById('pscPane-pub').style.display = tab === 'pub' ? '' : 'none';
-  const subBtn = document.getElementById('pscTab-sub');
-  const pubBtn = document.getElementById('pscTab-pub');
-  subBtn.style.borderBottomColor = tab === 'sub' ? 'var(--accent)' : 'transparent';
-  subBtn.style.color             = tab === 'sub' ? 'var(--accent)' : 'var(--muted)';
-  pubBtn.style.borderBottomColor = tab === 'pub' ? 'var(--accent)' : 'transparent';
-  pubBtn.style.color             = tab === 'pub' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('pscPane-sub').style.display  = tab === 'sub'  ? '' : 'none';
+  document.getElementById('pscPane-pub').style.display  = tab === 'pub'  ? '' : 'none';
+  document.getElementById('pscPane-list').style.display = tab === 'list' ? '' : 'none';
+  ['sub','pub','list'].forEach(t => {
+    const btn = document.getElementById('pscTab-' + t);
+    btn.style.borderBottomColor = tab === t ? 'var(--accent)' : 'transparent';
+    btn.style.color             = tab === t ? 'var(--accent)' : 'var(--muted)';
+  });
+  if (tab === 'list') pscListChannels();   // auto-fetch on first open
 }
 
 function pscAddChannel() {
@@ -2624,10 +2701,169 @@ function pscFillExample(type) {
   }
 }
 
-// Stop psc subscribe when leaving panel
+// ── List Channels ──
+let pscAutoRefreshTimer = null;
+
+async function pscListChannels() {
+  const db      = document.getElementById('psc-list-db').value;
+  const pattern = document.getElementById('psc-list-pattern').value.trim() || '*';
+  document.getElementById('psc-list-table-title').textContent = `Channels — DB${db}`;
+  document.getElementById('psc-list-pat-label').textContent   = `pattern: ${pattern}`;
+  document.getElementById('psc-list-body').innerHTML =
+    `<div class="loading"><div class="spinner"></div>Fetching…</div>`;
+  try {
+    const r = await fetch(`/api/pubsub/channels?db=${db}&pattern=${encodeURIComponent(pattern)}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    pscRenderChannelTable(d.channels, d.num_patterns, d.db);
+    document.getElementById('psc-list-summary').textContent =
+      `${d.channels.length} channel${d.channels.length !== 1 ? 's' : ''} found`;
+    document.getElementById('psc-list-ts').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+    const pi = document.getElementById('psc-list-patterns-info');
+    pi.style.display = '';
+    document.getElementById('psc-list-numpat').textContent = d.num_patterns;
+  } catch(e) {
+    document.getElementById('psc-list-body').innerHTML =
+      `<div class="error-box" style="margin:16px">ERR  ${e}</div>`;
+  }
+}
+
+async function pscListAllDbs() {
+  document.getElementById('psc-list-table-title').textContent = 'Channels — All DBs';
+  document.getElementById('psc-list-pat-label').textContent   = '';
+  document.getElementById('psc-list-body').innerHTML =
+    `<div class="loading"><div class="spinner"></div>Scanning all DBs…</div>`;
+  document.getElementById('psc-list-summary').textContent = '—';
+
+  const DB_NAMES = {0:'APPL_DB',1:'ASIC_DB',2:'COUNTERS_DB',3:'LOGLEVEL_DB',
+                    4:'CONFIG_DB',5:'PFC_WD_DB',6:'STATE_DB',7:'SNMP_OVERLAY_DB',8:'ERROR_DB'};
+  const pattern  = document.getElementById('psc-list-pattern').value.trim() || '*';
+  const results  = [];   // [{db, db_name, channels, num_patterns}]
+  let total      = 0;
+
+  await Promise.all(Object.keys(DB_NAMES).map(async db => {
+    try {
+      const r = await fetch(`/api/pubsub/channels?db=${db}&pattern=${encodeURIComponent(pattern)}`);
+      const d = await r.json();
+      if (d.ok) {
+        results.push({ db: parseInt(db), db_name: DB_NAMES[db], channels: d.channels, num_patterns: d.num_patterns });
+        total += d.channels.length;
+      }
+    } catch(_) {}
+  }));
+
+  results.sort((a, b) => a.db - b.db);
+  document.getElementById('psc-list-summary').textContent =
+    `${total} channel${total !== 1 ? 's' : ''} across ${results.length} DBs`;
+  document.getElementById('psc-list-ts').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+  document.getElementById('psc-list-pat-label').textContent = `pattern: ${pattern}`;
+
+  if (total === 0) {
+    document.getElementById('psc-list-body').innerHTML =
+      `<div style="padding:40px;text-align:center;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px">No active channels found across any DB</div>`;
+    return;
+  }
+
+  // Render grouped sections
+  let html = '';
+  for (const g of results) {
+    if (!g.channels.length) continue;
+    html += `
+      <div style="padding:10px 18px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;
+                  color:var(--muted);font-family:'IBM Plex Mono',monospace;background:rgba(255,255,255,0.02);
+                  border-bottom:1px solid var(--border)">
+        ${g.db_name} (DB${g.db}) — ${g.channels.length} channel${g.channels.length!==1?'s':''}
+        <span style="margin-left:8px;color:var(--accent);font-size:10px">${g.num_patterns} pattern sub${g.num_patterns!==1?'s':''}</span>
+      </div>
+      ${pscChannelRows(g.channels)}`;
+  }
+  document.getElementById('psc-list-body').innerHTML =
+    `<table style="width:100%;border-collapse:collapse">
+       <thead><tr style="background:rgba(255,255,255,0.02)">
+         <th style="padding:9px 16px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border)">Channel</th>
+         <th style="padding:9px 16px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border);width:140px">Subscribers</th>
+       </tr></thead>
+     </table>${html}`;
+}
+
+function pscRenderChannelTable(channels, numpat, db) {
+  if (!channels.length) {
+    document.getElementById('psc-list-body').innerHTML =
+      `<div style="padding:40px;text-align:center;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px">
+        No active channels on DB${db} matching the pattern
+       </div>`;
+    return;
+  }
+  document.getElementById('psc-list-body').innerHTML =
+    `<table style="width:100%;border-collapse:collapse">
+       <thead><tr style="background:rgba(255,255,255,0.02)">
+         <th style="padding:9px 16px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border)">Channel</th>
+         <th style="padding:9px 16px;text-align:right;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border);width:140px">Subscribers</th>
+       </tr></thead>
+       <tbody>${pscChannelRows(channels)}</tbody>
+     </table>`;
+}
+
+function pscChannelRows(channels) {
+  return channels.map(c => `
+    <tr style="transition:background 0.15s" onmouseover="this.style.background='rgba(0,212,255,0.03)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;border-bottom:1px solid rgba(30,45,61,0.5)">
+        <span style="color:var(--accent)">${c.channel}</span>
+        <button title="Copy channel name" onclick="navigator.clipboard.writeText('${c.channel.replace(/'/g,"\\'")}');this.textContent='✓';setTimeout(()=>this.textContent='⎘',1200)"
+          style="margin-left:8px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 4px;transition:color 0.15s"
+          onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⎘</button>
+        <button title="Subscribe to this channel" onclick="pscQuickSubscribe('${c.channel.replace(/'/g,"\\'")}',document.getElementById('psc-list-db').value)"
+          style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);border-radius:3px;color:var(--accent);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 7px;margin-left:4px;transition:all 0.15s"
+          onmouseover="this.style.background='rgba(0,212,255,0.18)'" onmouseout="this.style.background='rgba(0,212,255,0.08)'">SUB</button>
+      </td>
+      <td style="padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;border-bottom:1px solid rgba(30,45,61,0.5);text-align:right">
+        <span style="background:rgba(0,255,157,0.1);color:var(--accent2);border:1px solid rgba(0,255,157,0.25);border-radius:4px;padding:2px 10px;font-weight:700">
+          ${c.subscribers}
+        </span>
+      </td>
+    </tr>`).join('');
+}
+
+function pscQuickSubscribe(channel, db) {
+  // Switch to subscribe tab, prefill channel, select DB
+  pscSwitchTab('sub');
+  document.getElementById('psc-sub-db').value = db;
+  if (!pscChannels.find(c => c.value === channel)) {
+    pscChannels.push({ type: 'channel', value: channel });
+    pscRenderChannels();
+  }
+}
+
+function pscToggleAutoRefresh() {
+  const btn = document.getElementById('psc-list-autorefresh-btn');
+  if (pscAutoRefreshTimer) {
+    clearInterval(pscAutoRefreshTimer);
+    pscAutoRefreshTimer = null;
+    btn.textContent = '▶ Auto-refresh';
+    btn.style.background = 'rgba(0,212,255,0.1)';
+    btn.style.color      = 'var(--accent)';
+  } else {
+    pscListChannels();
+    pscAutoRefreshTimer = setInterval(pscListChannels, 5000);
+    btn.textContent = '⏹ Stop (5s)';
+    btn.style.background = 'rgba(0,255,157,0.1)';
+    btn.style.color      = 'var(--accent2)';
+  }
+}
+
+// Stop auto-refresh when leaving the panel
+
 const _origShowPanel2 = window.showPanel;
 window.showPanel = function(name) {
-  if (name !== 'pubsub-config' && pscEvtSource) pscStopSubscribe();
+  if (name !== 'pubsub-config') {
+    if (pscEvtSource) pscStopSubscribe();
+    if (pscAutoRefreshTimer) {
+      clearInterval(pscAutoRefreshTimer);
+      pscAutoRefreshTimer = null;
+      const btn = document.getElementById('psc-list-autorefresh-btn');
+      if (btn) { btn.textContent = '▶ Auto-refresh'; btn.style.background='rgba(0,212,255,0.1)'; btn.style.color='var(--accent)'; }
+    }
+  }
   _origShowPanel2(name);
 };
 
